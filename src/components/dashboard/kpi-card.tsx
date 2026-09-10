@@ -30,7 +30,8 @@ function useCountUp(target: number | null, enabled: boolean) {
   useEffect(() => {
     if (target === null) return;
     if (!enabled) {
-      setDisplay(target);
+      // Reduced motion: land on the final value without an animation frame.
+      queueMicrotask(() => setDisplay(target));
       return;
     }
     const from = 0;

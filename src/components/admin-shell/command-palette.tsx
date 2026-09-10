@@ -60,15 +60,16 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!paletteOpen) {
-      setQuery("");
-      setIndex(0);
+      // Deferred so closing does not cascade a render inside the effect body.
+      queueMicrotask(() => {
+        setQuery("");
+        setIndex(0);
+      });
       return;
     }
     const id = window.setTimeout(() => inputRef.current?.focus(), 30);
     return () => window.clearTimeout(id);
   }, [paletteOpen]);
-
-  useEffect(() => setIndex(0), [query]);
 
   useEffect(() => {
     listRef.current
@@ -126,7 +127,10 @@ export function CommandPalette() {
               <input
                 ref={inputRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setIndex(0);
+                }}
                 placeholder="Search modules or jump to an action…"
                 aria-label="Command palette search"
                 className="h-13 w-full bg-transparent text-[14px] outline-none placeholder:text-[var(--hm-ink-400)]"

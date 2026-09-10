@@ -118,8 +118,6 @@ export interface CardBackgroundCandidate {
 export function generateCardBackgrounds(swatches: Partial<MediaPalette>): CardBackgroundCandidate[] {
   const dominant = swatches.dominant && isValidHex(swatches.dominant) ? swatches.dominant : null;
   const vibrant = swatches.vibrant && isValidHex(swatches.vibrant) ? swatches.vibrant : dominant;
-  const light = swatches.light && isValidHex(swatches.light) ? swatches.light : vibrant;
-
   const build = (id: string, label: string, source: string | null, strength: number): CardBackgroundCandidate => {
     const src = source ?? HM_DEFAULT_CARD_BG;
     const hex = source ? softenForCard(src, strength) : HM_DEFAULT_CARD_BG;

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { HM_DEEP_NAVY, buildPalette } from "@/lib/media/palette";
+import { buildPalette } from "@/lib/media/palette";
 import { buildSearchTokens, slugify } from "@/lib/utils/format";
 import type {
   AdminUser,

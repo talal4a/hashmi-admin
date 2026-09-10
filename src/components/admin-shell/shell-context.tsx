@@ -47,16 +47,20 @@ export function ShellProvider({
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
-    try {
-      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
-    } catch {
-      // Private-mode browsers can throw on storage access; the default stands.
-    }
+    // Deferred: storage is unavailable during SSR, and setting state in the
+    // effect body would cascade a render.
+    queueMicrotask(() => {
+      try {
+        setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
+      } catch {
+        // Private-mode browsers can throw on storage access; the default stands.
+      }
+    });
   }, []);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
-    update();
+    queueMicrotask(update);
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
     return () => {
