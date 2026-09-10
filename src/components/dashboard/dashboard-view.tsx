@@ -64,11 +64,16 @@ export function DashboardView({
   activity,
   permissions,
   adminName,
+  greeting,
+  today,
 }: {
   data: DashboardData;
   activity: AuditLogEntry[];
   permissions: Permission[];
   adminName: string;
+  /** Both resolved on the server so the markup hydrates identically. */
+  greeting: string;
+  today: string;
 }) {
   const reduced = useReducedMotion();
   const can = (p: Permission) => permissions.includes(p);
@@ -80,8 +85,6 @@ export function DashboardView({
     { label: "Review Voice Orders", href: "/voice-orders", icon: Mic, permission: "voice.view" as Permission },
   ].filter((a) => can(a.permission));
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="flex flex-col gap-5">
@@ -91,12 +94,7 @@ export function DashboardView({
             {greeting}, {adminName.split(" ")[0]}
           </h1>
           <p className="mt-1 text-[13px] text-[var(--hm-ink-500)]">
-            {new Date().toLocaleDateString("en-PK", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
+            {today}
             {" · Revenue counted from "}
             {REVENUE_RULE_LABEL[data.revenueRule]}
           </p>

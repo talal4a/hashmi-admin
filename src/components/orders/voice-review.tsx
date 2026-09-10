@@ -23,7 +23,7 @@ import { Chip } from "@/components/ui/chip";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/utils/cn";
-import { formatPKR } from "@/lib/utils/format";
+import { formatDate, formatPKR } from "@/lib/utils/format";
 import {
   convertVoiceOrderAction,
   rejectVoiceOrderAction,
@@ -410,7 +410,7 @@ export function VoiceReview({
               {voiceOrder.retentionExpiresAt ? (
                 <p className="text-[11px] text-[var(--hm-ink-400)]">
                   Audio retained until{" "}
-                  {new Date(voiceOrder.retentionExpiresAt).toLocaleDateString("en-PK")} under the
+                  {formatDate(voiceOrder.retentionExpiresAt)} under the
                   configured retention policy.
                 </p>
               ) : null}

@@ -99,7 +99,7 @@ export function AdjustStage({
           {cropped ? (
             <div
               aria-hidden
-              className="pointer-events-none absolute border-2 border-[var(--hm-cyan-400)] bg-[var(--hm-cyan-400)]/12"
+              className="pointer-events-none absolute border-2 border-[var(--hm-cyan-400)] bg-[var(--hm-cyan-400)]/15"
               style={{
                 left: `${transform.crop.x * 100}%`,
                 top: `${transform.crop.y * 100}%`,

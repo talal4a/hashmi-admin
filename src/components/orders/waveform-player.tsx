@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { formatDuration } from "@/lib/utils/format";
+import { formatDateTime, formatDuration } from "@/lib/utils/format";
 
 /**
  * Voice-order audio player (PRD §7.2): waveform with progress, playback speed,
@@ -144,7 +144,7 @@ export function WaveformPlayer({
 
       <p className="mt-2 text-[11px] text-[var(--hm-ink-400)]">
         {src
-          ? `Recorded ${new Date(recordedAt).toLocaleString("en-PK")} · access is restricted to authorized roles`
+          ? `Recorded ${formatDateTime(recordedAt)} · access is restricted to authorized roles`
           : "No audio attached to this request — review the transcript and detected items instead."}
       </p>
 

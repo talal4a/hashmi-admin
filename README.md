@@ -76,7 +76,7 @@ firebase deploy --only firestore:rules,firestore:indexes
 | `npm run build` | Production build |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run lint` | ESLint, zero warnings tolerated |
-| `npm test` | Vitest suite (103 tests) |
+| `npm test` | Vitest suite (121 tests) |
 | `npm run check:secrets` | Scans the built client bundle for server-only secrets |
 | `npm run check:rbac` | Route-level authorization sweep (needs `npm run dev` running) |
 | `npm run verify` | All of the above, in order |
@@ -191,6 +191,7 @@ npm test
 | Inventory | Real datastore integration: adds, sets, floor at zero, reason enforcement, reservation lifecycle, fulfilment, audit trail, and concurrency |
 | Sessions | Signed-token round-trip, tampered payload, tampered signature, expiry, malformed input |
 | Rate limiting | Window behaviour, per-key isolation, expiry, client-key derivation |
+| Formatting | Currency, dates and relative times, pinned to exact output so a regression to locale-dependent `Intl` formatting (a hydration-mismatch source) fails here |
 
 Two checks run against real output rather than mocks:
 

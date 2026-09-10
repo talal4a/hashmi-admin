@@ -18,11 +18,11 @@ export default async function LoginPage() {
       <section className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[var(--hm-navy-950)] via-[var(--hm-navy-900)] to-[var(--hm-cyan-900)] p-10 text-white lg:flex">
         <div
           aria-hidden
-          className="absolute -top-24 -right-24 size-[420px] rounded-full bg-[var(--hm-cyan-500)]/22 blur-3xl"
+          className="absolute -top-24 -right-24 size-[420px] rounded-full bg-[var(--hm-cyan-500)]/20 blur-3xl"
         />
         <div
           aria-hidden
-          className="absolute -bottom-32 -left-16 size-[360px] rounded-full bg-[var(--hm-cyan-400)]/12 blur-3xl"
+          className="absolute -bottom-32 -left-16 size-[360px] rounded-full bg-[var(--hm-cyan-400)]/15 blur-3xl"
         />
 
         <div className="relative flex items-center gap-3">
@@ -46,7 +46,7 @@ export default async function LoginPage() {
           </p>
         </div>
 
-        <dl className="relative grid grid-cols-3 gap-5 border-t border-white/12 pt-6">
+        <dl className="relative grid grid-cols-3 gap-5 border-t border-white/15 pt-6">
           {[
             ["Catalog", "Media studio built in"],
             ["Orders", "Voice review + fulfilment"],

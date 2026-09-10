@@ -39,7 +39,21 @@ const DAY = 86_400_000;
 const now = Date.now();
 const iso = (offsetMs: number) => new Date(now + offsetMs).toISOString();
 
-function media(cardBg: string, emoji: string, url: string): ProductMedia {
+/**
+ * Seed artwork is an inline SVG data URI carrying the product's emoji, so the
+ * development datastore is entirely self-contained: no placeholder files to
+ * ship, nothing to 404, and the palette-derived card background is still
+ * exercised end to end.
+ */
+function emojiArtwork(emoji: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">` +
+    `<text x="50%" y="50%" dy="0.36em" text-anchor="middle" font-size="340">${emoji}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function media(cardBg: string, emoji: string, storageId: string): ProductMedia {
   return {
     source: {
       provider: "upload",
@@ -49,7 +63,13 @@ function media(cardBg: string, emoji: string, url: string): ProductMedia {
       attributionText: "Supplier-owned packshot",
       hotlinkOnly: false,
     },
-    original: { url, storageId: `seed/${emoji}`, width: 800, height: 800, mimeType: "image/webp" },
+    original: {
+      url: emojiArtwork(emoji),
+      storageId,
+      width: 512,
+      height: 512,
+      mimeType: "image/svg+xml",
+    },
     cutout: null,
     palette: buildPalette({ dominant: cardBg, vibrant: cardBg, light: cardBg }, cardBg),
     processing: {
@@ -177,7 +197,7 @@ function makeProduct(seed: ProductSeed, index: number): Product {
       lowStockThreshold: seed.threshold,
       allowOutOfStockVisibility: true,
     },
-    media: media(seed.cardBg, seed.emoji, `/seed-media/${seed.id}.svg`),
+    media: media(seed.cardBg, seed.emoji, `seed/${seed.id}`),
     merchandising: {
       featured: seed.featured ?? false,
       bestseller: seed.bestseller ?? false,
@@ -232,7 +252,7 @@ export async function seedLocalDatastore(db: LocalDatastore): Promise<void> {
       parentId: null,
       description: `${name} available across HashmiMart delivery areas.`,
       icon,
-      media: media(cardBg, icon, `/seed-media/${id}.svg`),
+      media: media(cardBg, icon, `seed/${id}`),
       sortOrder,
       status: "active",
       productCount: own.length,

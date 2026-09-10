@@ -50,7 +50,7 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--hm-topbar-h)] items-center gap-2 border-b border-[var(--hm-border)] bg-white/88 px-4 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-[var(--hm-topbar-h)] items-center gap-2 border-b border-[var(--hm-border)] bg-white/90 px-4 backdrop-blur-md">
       <button
         type="button"
         onClick={() => setMobileOpen(true)}

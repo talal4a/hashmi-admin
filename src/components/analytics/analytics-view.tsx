@@ -9,7 +9,7 @@ import { Chip } from "@/components/ui/chip";
 import { EmptyState, NotConfigured, Skeleton } from "@/components/ui/states";
 import { Table, TableScroll, Td, Th, Tr } from "@/components/ui/table";
 import { cn } from "@/lib/utils/cn";
-import { formatNumber, formatPKR } from "@/lib/utils/format";
+import { formatNumber, formatPKR, formatShortDate } from "@/lib/utils/format";
 import type { DashboardData } from "@/server/services/analytics";
 
 const RevenueTrendChart = dynamic(
@@ -121,7 +121,7 @@ export function AnalyticsView({
           label="Best day"
           value={
             bestDay && bestDay.revenue > 0
-              ? `${new Date(bestDay.date).toLocaleDateString("en-PK", { day: "2-digit", month: "short" })} · ${formatPKR(bestDay.revenue)}`
+              ? `${formatShortDate(bestDay.date)} · ${formatPKR(bestDay.revenue)}`
               : "—"
           }
         />

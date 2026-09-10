@@ -37,7 +37,7 @@ export function Sidebar() {
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.14 }}
-                className="overflow-hidden px-3 pb-1.5 text-[10.5px] font-bold tracking-[0.12em] text-white/38 uppercase"
+                className="overflow-hidden px-3 pb-1.5 text-[10.5px] font-bold tracking-[0.12em] text-white/40 uppercase"
               >
                 {section.label}
               </motion.p>
@@ -64,7 +64,7 @@ export function Sidebar() {
                     title={collapsed ? item.label : undefined}
                     className={cn(
                       "relative flex items-center gap-3 rounded-[11px] px-3 py-2.5 text-[13.5px] font-medium transition-colors duration-[var(--hm-dur-fast)]",
-                      active ? "text-white" : "text-white/68 hover:bg-white/7 hover:text-white",
+                      active ? "text-white" : "text-white/70 hover:bg-white/5 hover:text-white",
                       collapsed && "justify-center px-0",
                     )}
                   >
@@ -74,7 +74,7 @@ export function Sidebar() {
                       <span
                         className={cn(
                           "ml-auto rounded-full px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums",
-                          active ? "bg-white/25 text-white" : "bg-white/12 text-white/85",
+                          active ? "bg-white/25 text-white" : "bg-white/15 text-white/85",
                         )}
                       >
                         {badge > 99 ? "99+" : badge}
@@ -96,7 +96,7 @@ export function Sidebar() {
   const brand = (
     <div
       className={cn(
-        "flex items-center gap-2.5 border-b border-white/8 px-4",
+        "flex items-center gap-2.5 border-b border-white/10 px-4",
         collapsed ? "justify-center py-4" : "py-4",
       )}
     >
@@ -126,13 +126,13 @@ export function Sidebar() {
       >
         {brand}
         {nav}
-        <div className="border-t border-white/8 p-3">
+        <div className="border-t border-white/10 p-3">
           <button
             type="button"
             onClick={toggleCollapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/7 hover:text-white",
+              "flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/5 hover:text-white",
               collapsed && "justify-center px-0",
             )}
           >
@@ -166,7 +166,7 @@ export function Sidebar() {
               transition={{ type: "spring", stiffness: 420, damping: 40 }}
               className="relative flex h-full w-[276px] flex-col bg-gradient-to-b from-[var(--hm-navy-950)] to-[var(--hm-navy-900)]"
             >
-              <div className="flex items-center justify-between border-b border-white/8 px-4 py-4">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
                 <span className="flex items-center gap-2.5">
                   <span className="flex size-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-[var(--hm-cyan-400)] to-[var(--hm-cyan-600)] text-[15px] font-extrabold text-white">
                     H
@@ -177,7 +177,7 @@ export function Sidebar() {
                   type="button"
                   onClick={() => setMobileOpen(false)}
                   aria-label="Close navigation"
-                  className="rounded-[9px] p-1.5 text-white/60 hover:bg-white/8 hover:text-white"
+                  className="rounded-[9px] p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
                 >
                   <X className="size-4.5" />
                 </button>

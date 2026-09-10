@@ -444,7 +444,7 @@ export function SettingsView({
         </Card>
 
         {canWrite ? (
-          <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-end gap-2 rounded-[var(--hm-radius-card)] border border-[var(--hm-border)] bg-white/92 px-4 py-3 shadow-[var(--hm-shadow-md)] backdrop-blur">
+          <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-end gap-2 rounded-[var(--hm-radius-card)] border border-[var(--hm-border)] bg-white/90 px-4 py-3 shadow-[var(--hm-shadow-md)] backdrop-blur">
             {dirty ? (
               <span className="mr-auto text-[12.5px] font-medium text-[var(--hm-warning-700)]">
                 You have unsaved changes

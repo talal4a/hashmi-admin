@@ -19,7 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatPKR } from "@/lib/utils/format";
+import { formatPKR, formatShortDate } from "@/lib/utils/format";
 import type { DashboardData } from "@/server/services/analytics";
 
 /**
@@ -83,7 +83,7 @@ export function RevenueTrendChart({ data }: { data: DashboardData["revenueTrend"
     () =>
       data.map((d) => ({
         ...d,
-        label: new Date(d.date).toLocaleDateString("en-PK", { day: "2-digit", month: "short" }),
+        label: formatShortDate(d.date),
       })),
     [data],
   );

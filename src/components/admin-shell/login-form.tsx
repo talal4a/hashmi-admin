@@ -87,7 +87,19 @@ export function LoginForm({ firebaseReady }: { firebaseReady: boolean }) {
         Authorized staff only. Your session is verified on every request.
       </p>
 
-      <form onSubmit={submit} className="mt-7 flex flex-col gap-4" noValidate>
+      {/*
+        method="post" matters even though submission is handled in JS: if the
+        form is submitted before hydration completes, a default GET would put
+        the password in the URL and the browser history. A POST keeps it in the
+        body, and the handler below prevents the navigation once hydrated.
+      */}
+      <form
+        method="post"
+        action="/api/auth/session"
+        onSubmit={submit}
+        className="mt-7 flex flex-col gap-4"
+        noValidate
+      >
         <Field label="Work email" htmlFor="email" required>
           <Input
             id="email"

@@ -105,127 +105,167 @@
   --font-mono: var(--font-hm-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* --------------------------------------------------------------------- */
+/* Base resets                                                            */
+/* Layered deliberately: unlayered CSS outranks every layered rule, so an  */
+/* unlayered `a { color: inherit }` would beat Tailwind's utilities and     */
+/* stop text-colour classes applying to links.                             */
+/* --------------------------------------------------------------------- */
 
-html {
-  -webkit-text-size-adjust: 100%;
-}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-body {
-  margin: 0;
-  background: var(--hm-canvas);
-  color: var(--hm-ink-900);
-  font-family: var(--font-hm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  font-variant-numeric: tabular-nums;
-}
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+  body {
+    margin: 0;
+    background: var(--hm-canvas);
+    color: var(--hm-ink-900);
+    font-family: var(--font-hm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-variant-numeric: tabular-nums;
+  }
 
-img,
-svg {
-  display: block;
-  max-width: 100%;
-}
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 
-::selection {
-  background: var(--hm-cyan-100);
-  color: var(--hm-cyan-800);
-}
+  img,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
 
-/* Scrollbars */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--hm-ink-300) transparent;
-}
-*::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--hm-ink-200);
-  border-radius: var(--hm-radius-pill);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--hm-ink-300);
-  background-clip: content-box;
-}
+  ::selection {
+    background: var(--hm-cyan-100);
+    color: var(--hm-cyan-800);
+  }
 
-/* Focus — PRD §16.2 requires visible focus states everywhere */
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--hm-cyan-500);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
+  /* Scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--hm-ink-300) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--hm-ink-200);
+    border-radius: var(--hm-radius-pill);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--hm-ink-300);
+    background-clip: content-box;
+  }
 
-/* PRD §13.3 / §16.2 — reduced motion disables non-essential transitions */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+  /* Focus — PRD §16.2 requires visible focus states everywhere */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--hm-cyan-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* PRD §13.3 / §16.2 — reduced motion disables non-essential transitions */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 /* --------------------------------------------------------------------- */
-/* Utility layer                                                          */
+/* Component helpers — layered so utilities can still override them.       */
 /* --------------------------------------------------------------------- */
 
-.hm-card {
-  background: var(--hm-surface);
-  border: 1px solid var(--hm-border);
-  border-radius: var(--hm-radius-card);
-  box-shadow: var(--hm-shadow-xs);
-}
+@layer components {
+  .hm-card {
+    background: var(--hm-surface);
+    border: 1px solid var(--hm-border);
+    border-radius: var(--hm-radius-card);
+    box-shadow: var(--hm-shadow-xs);
+  }
 
-.hm-card-lg {
-  border-radius: var(--hm-radius-card-lg);
-}
+  .hm-card-lg {
+    border-radius: var(--hm-radius-card-lg);
+  }
 
-.hm-elevate {
-  transition:
-    box-shadow var(--hm-dur-fast) var(--hm-ease),
-    transform var(--hm-dur-fast) var(--hm-ease),
-    border-color var(--hm-dur-fast) var(--hm-ease);
-}
-.hm-elevate:hover {
-  box-shadow: var(--hm-shadow-md);
-  border-color: var(--hm-border-strong);
-  transform: translateY(-2px);
-}
+  .hm-elevate {
+    transition:
+      box-shadow var(--hm-dur-fast) var(--hm-ease),
+      transform var(--hm-dur-fast) var(--hm-ease),
+      border-color var(--hm-dur-fast) var(--hm-ease);
+  }
+  .hm-elevate:hover {
+    box-shadow: var(--hm-shadow-md);
+    border-color: var(--hm-border-strong);
+    transform: translateY(-2px);
+  }
 
-.hm-scroll-x {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
+  .hm-scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
 
-/* Skeletons — reserve stable space so stats never cause layout jump (§16.2) */
-.hm-skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--hm-ink-100) 25%,
-    var(--hm-ink-50) 37%,
-    var(--hm-ink-100) 63%
-  );
-  background-size: 400% 100%;
-  animation: hm-shimmer 1.4s ease infinite;
-  border-radius: 8px;
+  /* Skeletons — reserve stable space so stats never cause layout jump (§16.2) */
+  .hm-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--hm-ink-100) 25%,
+      var(--hm-ink-50) 37%,
+      var(--hm-ink-100) 63%
+    );
+    background-size: 400% 100%;
+    animation: hm-shimmer 1.4s ease infinite;
+    border-radius: 8px;
+  }
+
+
+
+  /* Cyan check sweep — publish / order fulfilled only (§13.2) */
+
+
+  .hm-sweep::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+    animation: hm-sweep 700ms var(--hm-ease);
+    pointer-events: none;
+  }
+
+  /* Checkerboard behind cutouts so transparency is readable */
+  .hm-checkerboard {
+    background-image:
+      linear-gradient(45deg, var(--hm-ink-100) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--hm-ink-100) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--hm-ink-100) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--hm-ink-100) 75%);
+    background-size: 16px 16px;
+    background-position:
+      0 0,
+      0 8px,
+      8px -8px,
+      -8px 0;
+  }
 }
 
 @keyframes hm-shimmer {
@@ -237,7 +277,6 @@ svg {
   }
 }
 
-/* Cyan check sweep — publish / order fulfilled only (§13.2) */
 @keyframes hm-sweep {
   0% {
     transform: translateX(-110%) skewX(-16deg);
@@ -250,28 +289,4 @@ svg {
     transform: translateX(210%) skewX(-16deg);
     opacity: 0;
   }
-}
-
-.hm-sweep::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
-  animation: hm-sweep 700ms var(--hm-ease);
-  pointer-events: none;
-}
-
-/* Checkerboard behind cutouts so transparency is readable */
-.hm-checkerboard {
-  background-image:
-    linear-gradient(45deg, var(--hm-ink-100) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--hm-ink-100) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--hm-ink-100) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--hm-ink-100) 75%);
-  background-size: 16px 16px;
-  background-position:
-    0 0,
-    0 8px,
-    8px -8px,
-    -8px 0;
 }
