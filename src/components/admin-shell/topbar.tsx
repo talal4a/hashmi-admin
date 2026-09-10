@@ -14,7 +14,7 @@ import { useShell } from "./shell-context";
 export function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { admin, counts, backend, setMobileOpen, setPaletteOpen, online } = useShell();
+  const { admin, counts, backend, authBypass, setMobileOpen, setPaletteOpen, online } = useShell();
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -86,6 +86,17 @@ export function Topbar() {
             <span className="hidden sm:inline">Offline</span>
           </span>
         )}
+
+        {/* Impossible to miss that sign-in is currently switched off. */}
+        {authBypass ? (
+          <span
+            title="DEV_AUTH_BYPASS is set in .env.local — anyone reaching this server is treated as a super admin. Development only."
+            className="flex items-center gap-1.5 rounded-full bg-[var(--hm-danger-50)] px-2.5 py-1 text-[10.5px] font-bold tracking-[0.05em] text-[var(--hm-danger-700)] uppercase"
+          >
+            <span className="size-1.5 rounded-full bg-[var(--hm-danger-500)]" />
+            Login off
+          </span>
+        ) : null}
 
         {/* Environment badge (PRD §2.2) — states plainly where data is going. */}
         <span

@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "check:secrets": "node --env-file=.env.local scripts/check-client-bundle.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:secrets",
-    "check:rbac": "node --env-file=.env.local scripts/check-rbac.mjs"
+    "check:rbac": "node --env-file=.env.local scripts/check-rbac.mjs",
+    "create-admin": "node --env-file-if-exists=.env.local scripts/create-admin.mjs"
   },
   "dependencies": {
     "@bunnio/rembg-web": "^1.0.2",

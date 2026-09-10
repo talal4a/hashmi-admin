@@ -68,8 +68,58 @@ async function loadAdmin(uid: string): Promise<AdminUser | null> {
   return admin as AdminUser;
 }
 
+/**
+ * Development-only switch that skips sign-in entirely, so the dashboard can be
+ * opened while authentication is still being set up.
+ *
+ * Deliberately not a commented-out guard: that is easy to forget and easy to
+ * ship. This is refused outright in a production build regardless of how the
+ * variable is set, and it announces itself in the server log every time it is
+ * used. Remove DEV_AUTH_BYPASS from .env.local to turn it off.
+ */
+export const isAuthBypassEnabled =
+  process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "true";
+
+let bypassWarned = false;
+
+async function bypassAdmin(): Promise<AdminUser> {
+  if (!bypassWarned) {
+    console.warn(
+      "\n[hashmimart-admin] DEV_AUTH_BYPASS is on — every request is treated as a signed-in super admin.\n" +
+        "                   Development only. Remove it from .env.local before deploying.\n",
+    );
+    bypassWarned = true;
+  }
+
+  await ensureSeeded();
+  const admins = await getDatastore()
+    .collection<AdminUser & { id: string }>(COLLECTIONS.admins)
+    .all();
+
+  // Prefer a real seeded or Firestore admin so the UI shows a genuine name.
+  const existing = admins.find((a) => a.active && a.role === "super_admin") ?? admins.find((a) => a.active);
+  if (existing) {
+    const { id: _id, ...admin } = existing;
+    void _id;
+    return admin as AdminUser;
+  }
+
+  // Firestore may be empty on a fresh project; synthesise one rather than
+  // sending the developer back to a login they are trying to skip.
+  return {
+    uid: "dev-bypass",
+    email: "dev@localhost",
+    displayName: "Dev Bypass",
+    role: "super_admin",
+    active: true,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 /** Resolves the signed-in admin, or null. Never throws on a bad cookie. */
 export async function getSessionAdmin(): Promise<AdminUser | null> {
+  if (isAuthBypassEnabled) return bypassAdmin();
+
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;

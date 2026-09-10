@@ -16,6 +16,8 @@ interface ShellState {
   admin: AdminUser;
   counts: ShellCounts;
   backend: "firestore" | "local";
+  /** True while DEV_AUTH_BYPASS is on, so the UI can say so plainly. */
+  authBypass: boolean;
   collapsed: boolean;
   toggleCollapsed: () => void;
   mobileOpen: boolean;
@@ -34,11 +36,13 @@ export function ShellProvider({
   admin,
   counts,
   backend,
+  authBypass = false,
   children,
 }: {
   admin: AdminUser;
   counts: ShellCounts;
   backend: "firestore" | "local";
+  authBypass?: boolean;
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -98,6 +102,7 @@ export function ShellProvider({
       admin,
       counts,
       backend,
+      authBypass,
       collapsed,
       toggleCollapsed,
       mobileOpen,
@@ -107,7 +112,7 @@ export function ShellProvider({
       can: (permission: Permission) => canFn(admin, permission),
       online,
     }),
-    [admin, counts, backend, collapsed, toggleCollapsed, mobileOpen, paletteOpen, online],
+    [admin, counts, backend, authBypass, collapsed, toggleCollapsed, mobileOpen, paletteOpen, online],
   );
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;

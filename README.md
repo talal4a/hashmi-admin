@@ -49,6 +49,20 @@ Then sign in as any seeded admin to see a different role's view:
 
 Delete `.hm-data/` to reset to the seed.
 
+### Skipping sign-in while you set things up
+
+To open the dashboard without logging in at all, add this to `.env.local` and
+restart:
+
+```bash
+DEV_AUTH_BYPASS=true
+```
+
+Every request is then treated as a signed-in super admin. A production build
+refuses it no matter how the variable is set, the server logs a warning on first
+use, and the topbar shows a red **Login off** badge so the state is never a
+mystery. Delete the line to restore normal sign-in.
+
 ### With Firebase
 
 You need two things: the **server credential** and the **client web config**.
