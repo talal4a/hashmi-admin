@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the template must ship: every value in it is blank, and without it a
+# fresh clone has no record of which variables the app needs.
+!.env.example
 
 # vercel
 .vercel
@@ -45,3 +48,10 @@ next-env.d.ts
 
 # Local env — never commit real credentials
 .env*.local
+
+# Firebase service-account key — local development only.
+# Holds a private key with full database access: never commit it.
+service-account.json
+serviceAccountKey.json
+firebase-service-account.json
+*-firebase-adminsdk-*.json

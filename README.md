@@ -51,8 +51,27 @@ Delete `.hm-data/` to reset to the seed.
 
 ### With Firebase
 
-Fill in the Admin SDK block and the client-safe web config in `.env.local`, and
-the app switches to Firestore automatically — the badge changes to **Firestore**.
+You need two things: the **server credential** and the **client web config**.
+
+**Server credential — pick either.** The file is easier locally; environment
+variables are what deployment needs. If both exist, the file wins.
+
+*Option A, a file:* save the JSON from Project Settings → Service Accounts →
+Generate new private key as `service-account.json` in the project root. It is
+git-ignored, and the app finds it with no configuration. To keep it elsewhere,
+set `FIREBASE_SERVICE_ACCOUNT_PATH` to its path.
+
+That file grants full read and write over your database and bypasses every
+security rule, so never commit it and never put it in `public/`.
+
+*Option B, environment variables:* set `FIREBASE_ADMIN_PROJECT_ID`,
+`FIREBASE_ADMIN_CLIENT_EMAIL` and `FIREBASE_ADMIN_PRIVATE_KEY`. The private key
+must be one line, in double quotes, with its `\n` markers intact.
+
+**Client web config:** the `NEXT_PUBLIC_FIREBASE_*` block, copied from Project
+Settings → General → Your apps. Not secret, and required for sign-in.
+
+With both in place the badge changes to **Firestore**.
 Sign-in then goes through Firebase Email/Password; the browser's ID token is
 exchanged server-side for an HttpOnly session cookie, and local sign-in is
 disabled.
