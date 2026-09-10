@@ -78,6 +78,7 @@ firebase deploy --only firestore:rules,firestore:indexes
 | `npm run lint` | ESLint, zero warnings tolerated |
 | `npm test` | Vitest suite (103 tests) |
 | `npm run check:secrets` | Scans the built client bundle for server-only secrets |
+| `npm run check:rbac` | Route-level authorization sweep (needs `npm run dev` running) |
 | `npm run verify` | All of the above, in order |
 
 ---
@@ -191,6 +192,16 @@ npm test
 | Sessions | Signed-token round-trip, tampered payload, tampered signature, expiry, malformed input |
 | Rate limiting | Window behaviour, per-key isolation, expiry, client-key derivation |
 
+Two checks run against real output rather than mocks:
+
+- `npm run check:secrets` scans `.next/static` for the value — or even the name —
+  of any server-only variable, after a build.
+- `npm run check:rbac` signs in as each seeded role against a running dev server
+  and makes 65 route-level assertions: every role sees its own modules, every
+  other module renders the permission-denied UI, and no module's data leaks
+  across a role boundary. Status codes are deliberately not the signal, because
+  Next streams the shell and commits a 200 before the render is interrupted.
+
 ---
 
 ## Before production
@@ -207,6 +218,7 @@ The PRD's cleanup gate (§25), restated as a checklist:
 - [ ] Confirm `.env.local` is git-ignored (it is) and run a repository secret
       scan.
 - [ ] Run `npm run verify` and confirm the bundle scan passes.
+- [ ] Run `npm run check:rbac` against a deployed preview.
 - [ ] Deploy `firestore.rules` and `firestore.indexes.json`.
 - [ ] Pin and licence-review the background-removal model artifacts.
 - [ ] Configure Firebase Storage for media, or keep local delivery behind the
