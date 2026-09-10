@@ -1,25 +1,34 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { motion } from "motion/react";
+import type { CSSProperties, ReactNode } from "react";
 import { OfflineState } from "@/components/ui/states";
 import { PageTransition } from "./page-transition";
 import { Topbar } from "./topbar";
 import { useShell } from "./shell-context";
 
 /**
- * Content frame. Its left offset springs in step with the sidebar so the layout
- * reflows without jank (PRD §13.2).
+ * Content frame. Its left offset follows the sidebar width.
+ *
+ * The offset is applied through a CSS variable and a `lg:` class rather than by
+ * measuring the viewport in JavaScript. Reading `window.innerWidth` during
+ * render made the server emit `0px` and the browser `268px`, which React
+ * reports as a hydration mismatch. Letting the media query decide means the
+ * server and the client render identical markup, and the breakpoint here can
+ * never drift from the one the sidebar itself uses.
  */
 export function ShellFrame({ children }: { children: ReactNode }) {
   const { collapsed, online } = useShell();
 
   return (
-    <motion.div
-      animate={{ paddingLeft: typeof window !== "undefined" && window.innerWidth >= 1024 ? (collapsed ? 76 : 268) : 0 }}
-      initial={false}
-      transition={{ type: "spring", stiffness: 420, damping: 40 }}
-      className="flex min-h-screen flex-col"
+    <div
+      style={
+        {
+          "--hm-content-offset": collapsed
+            ? "var(--hm-sidebar-w-collapsed)"
+            : "var(--hm-sidebar-w)",
+        } as CSSProperties
+      }
+      className="flex min-h-screen flex-col transition-[padding-left] duration-[var(--hm-dur-med)] ease-[var(--hm-ease)] lg:pl-[var(--hm-content-offset)]"
     >
       {/* Keyboard users can jump past the nav and topbar (PRD §16.2). */}
       <a
@@ -37,6 +46,6 @@ export function ShellFrame({ children }: { children: ReactNode }) {
         ) : null}
         <PageTransition>{children}</PageTransition>
       </main>
-    </motion.div>
+    </div>
   );
 }

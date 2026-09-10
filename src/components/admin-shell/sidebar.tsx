@@ -9,6 +9,10 @@ import { NAV_SECTIONS } from "./nav";
 import { NavIcon } from "./icon";
 import { useShell } from "./shell-context";
 
+/** Must match --hm-sidebar-w and --hm-sidebar-w-collapsed in globals.css. */
+const SIDEBAR_W = 268;
+const SIDEBAR_W_COLLAPSED = 76;
+
 function badgeValue(key: string | undefined, counts: ReturnType<typeof useShell>["counts"]) {
   if (!key) return 0;
   if (key === "pendingOrders") return counts.pendingOrders;
@@ -120,7 +124,9 @@ export function Sidebar() {
     <>
       {/* Desktop rail */}
       <motion.aside
-        animate={{ width: collapsed ? 76 : 268 }}
+        // Kept in step with --hm-sidebar-w / --hm-sidebar-w-collapsed, which the
+        // content frame uses for its matching offset.
+        animate={{ width: collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W }}
         transition={{ type: "spring", stiffness: 420, damping: 40 }}
         className="fixed inset-y-0 left-0 z-40 hidden flex-col bg-gradient-to-b from-[var(--hm-navy-950)] to-[var(--hm-navy-900)] lg:flex"
       >
