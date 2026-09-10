@@ -1,0 +1,277 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   HashmiMart Admin — design tokens
+   Original token layer. Direction from PRD §13.1: cyan primary, white/pale-cyan
+   surfaces, deep navy text, restrained depth, desktop-efficient density.
+   ========================================================================= */
+
+:root {
+  /* Brand — cyan */
+  --hm-cyan-50: #ecfeff;
+  --hm-cyan-100: #cffafe;
+  --hm-cyan-200: #a5f3fc;
+  --hm-cyan-300: #67e8f9;
+  --hm-cyan-400: #22d3ee;
+  --hm-cyan-500: #06b6d4;
+  --hm-cyan-600: #0891b2;
+  --hm-cyan-700: #0e7490;
+  --hm-cyan-800: #155e75;
+  --hm-cyan-900: #164e63;
+
+  /* Deep navy — sidebar, headings */
+  --hm-navy-950: #060b1a;
+  --hm-navy-900: #0b1327;
+  --hm-navy-800: #111c38;
+  --hm-navy-700: #18274a;
+  --hm-navy-600: #22355f;
+  --hm-navy-500: #33487a;
+
+  /* Ink / slate ramp */
+  --hm-ink-900: #0f172a;
+  --hm-ink-800: #1e293b;
+  --hm-ink-700: #334155;
+  --hm-ink-500: #64748b;
+  --hm-ink-400: #94a3b8;
+  --hm-ink-300: #cbd5e1;
+  --hm-ink-200: #e2e8f0;
+  --hm-ink-100: #f1f5f9;
+  --hm-ink-50: #f8fafc;
+
+  /* Semantic */
+  --hm-success-50: #ecfdf5;
+  --hm-success-100: #d1fae5;
+  --hm-success-500: #10b981;
+  --hm-success-700: #047857;
+
+  --hm-warning-50: #fffbeb;
+  --hm-warning-100: #fef3c7;
+  --hm-warning-500: #f59e0b;
+  --hm-warning-700: #b45309;
+
+  --hm-danger-50: #fef2f2;
+  --hm-danger-100: #fee2e2;
+  --hm-danger-500: #ef4444;
+  --hm-danger-700: #b91c1c;
+
+  --hm-info-50: #eff6ff;
+  --hm-info-100: #dbeafe;
+  --hm-info-500: #3b82f6;
+  --hm-info-700: #1d4ed8;
+
+  --hm-violet-50: #f5f3ff;
+  --hm-violet-100: #ede9fe;
+  --hm-violet-500: #8b5cf6;
+  --hm-violet-700: #6d28d9;
+
+  /* Surfaces */
+  --hm-canvas: #f6fafb;
+  --hm-surface: #ffffff;
+  --hm-surface-sunken: var(--hm-ink-50);
+  --hm-border: #e6edf2;
+  --hm-border-strong: #d3e0e8;
+
+  /* Radii — PRD §13.1: 14-20px cards, 10-14px controls */
+  --hm-radius-card: 16px;
+  --hm-radius-card-lg: 20px;
+  --hm-radius-control: 11px;
+  --hm-radius-control-lg: 14px;
+  --hm-radius-pill: 999px;
+
+  /* Shadows — soft, low opacity */
+  --hm-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --hm-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --hm-shadow-md: 0 10px 26px -8px rgba(15, 23, 42, 0.12);
+  --hm-shadow-lg: 0 24px 56px -16px rgba(15, 23, 42, 0.22);
+  --hm-shadow-cyan: 0 8px 22px -10px rgba(6, 182, 212, 0.55);
+
+  /* Shell metrics */
+  --hm-sidebar-w: 268px;
+  --hm-sidebar-w-collapsed: 76px;
+  --hm-topbar-h: 64px;
+
+  /* Motion */
+  --hm-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --hm-dur-fast: 140ms;
+  --hm-dur-med: 220ms;
+}
+
+@theme inline {
+  --color-cyan-brand: var(--hm-cyan-500);
+  --color-canvas: var(--hm-canvas);
+  --color-surface: var(--hm-surface);
+  --color-hairline: var(--hm-border);
+  --font-sans: var(--font-hm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-hm-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--hm-canvas);
+  color: var(--hm-ink-900);
+  font-family: var(--font-hm-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: var(--hm-cyan-100);
+  color: var(--hm-cyan-800);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hm-ink-300) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--hm-ink-200);
+  border-radius: var(--hm-radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--hm-ink-300);
+  background-clip: content-box;
+}
+
+/* Focus — PRD §16.2 requires visible focus states everywhere */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--hm-cyan-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* PRD §13.3 / §16.2 — reduced motion disables non-essential transitions */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------- */
+/* Utility layer                                                          */
+/* --------------------------------------------------------------------- */
+
+.hm-card {
+  background: var(--hm-surface);
+  border: 1px solid var(--hm-border);
+  border-radius: var(--hm-radius-card);
+  box-shadow: var(--hm-shadow-xs);
+}
+
+.hm-card-lg {
+  border-radius: var(--hm-radius-card-lg);
+}
+
+.hm-elevate {
+  transition:
+    box-shadow var(--hm-dur-fast) var(--hm-ease),
+    transform var(--hm-dur-fast) var(--hm-ease),
+    border-color var(--hm-dur-fast) var(--hm-ease);
+}
+.hm-elevate:hover {
+  box-shadow: var(--hm-shadow-md);
+  border-color: var(--hm-border-strong);
+  transform: translateY(-2px);
+}
+
+.hm-scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* Skeletons — reserve stable space so stats never cause layout jump (§16.2) */
+.hm-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--hm-ink-100) 25%,
+    var(--hm-ink-50) 37%,
+    var(--hm-ink-100) 63%
+  );
+  background-size: 400% 100%;
+  animation: hm-shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+
+@keyframes hm-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Cyan check sweep — publish / order fulfilled only (§13.2) */
+@keyframes hm-sweep {
+  0% {
+    transform: translateX(-110%) skewX(-16deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(210%) skewX(-16deg);
+    opacity: 0;
+  }
+}
+
+.hm-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  animation: hm-sweep 700ms var(--hm-ease);
+  pointer-events: none;
+}
+
+/* Checkerboard behind cutouts so transparency is readable */
+.hm-checkerboard {
+  background-image:
+    linear-gradient(45deg, var(--hm-ink-100) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--hm-ink-100) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--hm-ink-100) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--hm-ink-100) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
