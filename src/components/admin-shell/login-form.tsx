@@ -146,8 +146,9 @@ export function LoginForm({ firebaseReady }: { firebaseReady: boolean }) {
       {!firebaseReady ? (
         <p className="mt-5 rounded-[var(--hm-radius-control)] border border-[var(--hm-warning-100)] bg-[var(--hm-warning-50)] px-3 py-2.5 text-[12px] leading-relaxed text-[var(--hm-warning-700)]">
           Firebase is not configured, so the dashboard is running against the local development
-          datastore. Sign in with a seeded admin email and the <code>DEV_ADMIN_PASSWORD</code> value
-          from your <code>.env.local</code>. Add the Firebase keys to switch to real authentication.
+          datastore. Sign in with a seeded admin email and the development password set in your{" "}
+          <code>.env.local</code> — see the README for the variable name. Add the Firebase keys to
+          switch to real authentication.
         </p>
       ) : null}
     </div>

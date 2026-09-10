@@ -1,36 +1,227 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HashmiMart Admin Dashboard
 
-## Getting Started
+A production-grade admin dashboard for the HashmiMart grocery operation: catalog,
+categories, media, inventory, orders, voice orders, customers, offers, vendors,
+banners, analytics, notifications, settings and audit history — built to the
+supplied PRD.
 
-First, run the development server:
+Next.js App Router · TypeScript · Tailwind CSS v4 · Firebase Auth + Firestore ·
+Motion · Recharts · Zod.
+
+---
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # fill in what you have
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The dashboard runs immediately, with or without Firebase.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Without Firebase (default)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+If the Firebase Admin credentials are absent, the app uses a **local development
+datastore** — a JSON file under `.hm-data/` seeded with realistic HashmiMart
+data (30 products, 10 categories, 64 orders, 9 voice requests, 6 customers, 6
+delivery areas, coupons, banners and audit history). Document shapes are
+identical to the Firestore ones, so nothing above the repository layer changes
+when you attach a real project.
 
-## Learn More
+The topbar shows a **Local data** badge whenever this backend is active.
 
-To learn more about Next.js, take a look at the following resources:
+To sign in, set a development password in `.env.local`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+DEV_ADMIN_PASSWORD=pick-something
+AUTH_SESSION_SECRET=$(openssl rand -base64 48)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Then sign in as any seeded admin to see a different role's view:
 
-## Deploy on Vercel
+| Email | Role |
+| --- | --- |
+| `admin@hashmimart.example` | Super admin |
+| `catalog@hashmimart.example` | Catalog manager |
+| `orders@hashmimart.example` | Order manager |
+| `support@hashmimart.example` | Support agent |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Delete `.hm-data/` to reset to the seed.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### With Firebase
+
+Fill in the Admin SDK block and the client-safe web config in `.env.local`, and
+the app switches to Firestore automatically — the badge changes to **Firestore**.
+Sign-in then goes through Firebase Email/Password; the browser's ID token is
+exchanged server-side for an HttpOnly session cookie, and local sign-in is
+disabled.
+
+Create the admin records first (a document per admin in `admins/`, keyed by
+email); the first sign-in binds each record to its Firebase Auth uid.
+
+Deploy the rules and indexes:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+---
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm run lint` | ESLint, zero warnings tolerated |
+| `npm test` | Vitest suite (103 tests) |
+| `npm run check:secrets` | Scans the built client bundle for server-only secrets |
+| `npm run verify` | All of the above, in order |
+
+---
+
+## Architecture
+
+```
+src/
+  app/
+    (auth)/login              Sign-in
+    (admin)/                  Every admin route, behind one server-side guard
+    api/auth/session          ID token -> HttpOnly session cookie
+    api/media/search          Provider search (keys stay server-side)
+    api/media/upload          Validated media upload
+    api/media/provider-event  Provider-required tracking events
+    api/media/file/[id]       Authenticated delivery for local media
+  components/
+    admin-shell/  ui/  dashboard/  products/  categories/
+    media-studio/ orders/ inventory/ customers/ marketing/
+    analytics/ system/
+  lib/
+    auth/         RBAC matrix, session, rate limiting
+    firebase/     client config, Admin SDK (server-only)
+    media/        palette maths, background removal, provider clients
+    validation/   Zod schemas — one per write boundary
+    utils/        formatting, pricing
+  server/
+    datastore/    Firestore and local backends behind one interface
+    repositories/ Data access
+    services/     Inventory, analytics, media storage
+    actions/      Server actions — every one re-checks permission
+  types/          The domain model
+```
+
+### Data layer
+
+`getDatastore()` returns either a Firestore-backed or a local-file-backed
+implementation of the same `Datastore` interface. Read-modify-write cycles go
+through `mutate()`, which uses a real Firestore transaction on one backend and a
+single-writer queue on the other — so stock arithmetic cannot interleave under
+either. There is an integration test that fires twenty simultaneous adjustments
+and asserts not a unit is lost.
+
+### Authorization
+
+Roles map to permissions in `src/lib/auth/permissions.ts`. Every admin page
+calls `requirePermission(...)` and every server action calls
+`assertPermission(...)` before touching data — the client-side checks only
+decide what to render. The last active super admin cannot be demoted, disabled
+or removed, and no admin can disable or remove their own account.
+
+### The media studio
+
+Search or upload → capture attribution → crop/rotate → remove background in the
+browser → extract the palette → generate and choose a card background → preview
+the exact mobile card → upload and persist.
+
+- Provider keys never reach the browser. All three providers are reached only
+  through `/api/media/search`, which normalizes results and caches queries for
+  24 hours as Pixabay's terms require.
+- **Unsplash results stay hotlinked** and fire the required download event, as
+  their API guidelines mandate. Pixabay and Pexels selections are copied into
+  HashmiMart storage.
+- Background removal runs in the admin's browser via `@bunnio/rembg-web` over
+  `onnxruntime-web`, so there is no per-image cost. Progress is real — it comes
+  from the inference callback, never a timer.
+- A removal failure never touches the original. The admin can retry with a
+  different model, correct the mask by hand with the erase/restore brush, or
+  skip removal entirely.
+- Every generated card background is mixed toward white until it clears the
+  4.5:1 AA bar against its own computed foreground. There is a test asserting
+  this for ten adversarial input colours.
+
+**Serving the models.** Background removal needs the U2Net-family `.onnx`
+artifacts. Place them in `public/models/` (`u2netp.onnx`, `u2net.onnx`,
+`silueta.onnx`, `isnet-general-use.onnx`), or point
+`NEXT_PUBLIC_REMBG_MODEL_BASE_URL` at a CDN. Pin the exact artifact version and
+review each model's licence independently of the wrapper library before
+production. Until an artifact is reachable the studio says so plainly and the
+rest of the pipeline still works.
+
+---
+
+## Environment variables
+
+Everything is documented in `.env.example`. The rule that matters:
+
+**No server-only value may ever move to a `NEXT_PUBLIC_*` variable.** Only the
+Firebase web config block is client-safe, and it is not secret by design.
+
+`npm run check:secrets` enforces this against the actual build output — it fails
+if a server-only variable's *value* or even its *name* appears in
+`.next/static`.
+
+---
+
+## Testing
+
+```bash
+npm test
+```
+
+| Area | What is covered |
+| --- | --- |
+| Pricing | Discount percentages, offer application, coupon evaluation (windows, limits, caps, minimums), tax-inclusive and tax-exclusive totals |
+| Palette | Hex conversion, WCAG contrast, foreground selection, the softening guarantee, candidate generation, fallbacks |
+| Order transitions | The full state machine — happy path, skip-ahead blocked, backwards blocked, terminal statuses, where refunds are allowed |
+| Validation | Product draft vs publish rules, the publish checklist, categories, coupons, delivery areas, settings invariants, slug and search tokens |
+| RBAC | Every role's boundaries, override handling, and denial for a missing user |
+| Inventory | Real datastore integration: adds, sets, floor at zero, reason enforcement, reservation lifecycle, fulfilment, audit trail, and concurrency |
+| Sessions | Signed-token round-trip, tampered payload, tampered signature, expiry, malformed input |
+| Rate limiting | Window behaviour, per-key isolation, expiry, client-key derivation |
+
+---
+
+## Before production
+
+The PRD's cleanup gate (§25), restated as a checklist:
+
+- [ ] **Rotate every credential.** The provider keys supplied for testing must be
+      treated as already exposed. Issue fresh ones and store them only in the
+      deployment provider's encrypted environment settings.
+- [ ] Set a strong `AUTH_SESSION_SECRET`. The app refuses to start in production
+      without one.
+- [ ] Remove `DEV_ADMIN_PASSWORD` from any deployed environment — it is
+      development-only and is ignored once Firebase is configured.
+- [ ] Confirm `.env.local` is git-ignored (it is) and run a repository secret
+      scan.
+- [ ] Run `npm run verify` and confirm the bundle scan passes.
+- [ ] Deploy `firestore.rules` and `firestore.indexes.json`.
+- [ ] Pin and licence-review the background-removal model artifacts.
+- [ ] Configure Firebase Storage for media, or keep local delivery behind the
+      authenticated route.
+
+---
+
+## Reference-site inspection
+
+`docs/reference-inventory.md` records the inspection the PRD requires before
+implementation: the navigation map, component inventory, workflow inventory,
+motion inventory and the parity checklist for the existing HashmiMart features.
+It also records exactly how far each reference site could be inspected from the
+build environment.
+
+Neither reference's code, assets or branding is copied. The visual system —
+palette, type scale, spacing, radii, motion and component architecture — is
+HashmiMart's own.

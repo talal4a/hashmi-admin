@@ -21,8 +21,15 @@ export function ShellFrame({ children }: { children: ReactNode }) {
       transition={{ type: "spring", stiffness: 420, damping: 40 }}
       className="flex min-h-screen flex-col"
     >
+      {/* Keyboard users can jump past the nav and topbar (PRD §16.2). */}
+      <a
+        href="#hm-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-[var(--hm-radius-control)] focus:bg-[var(--hm-cyan-600)] focus:px-3.5 focus:py-2 focus:text-[13px] focus:font-semibold focus:text-white"
+      >
+        Skip to main content
+      </a>
       <Topbar />
-      <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6">
+      <main id="hm-main" tabIndex={-1} className="flex-1 px-4 py-5 sm:px-6 sm:py-6">
         {!online ? (
           <div className="mb-4">
             <OfflineState />

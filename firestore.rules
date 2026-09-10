@@ -1,0 +1,187 @@
+rules_version = '2';
+
+/**
+ * HashmiMart Firestore security rules (PRD §10.3, §17 phase 7).
+ *
+ * The admin dashboard writes through the Firebase Admin SDK, which bypasses
+ * these rules entirely — every privileged write is already authorised by the
+ * server's own role check. These rules therefore govern the *client* SDK: the
+ * mobile app and the storefront.
+ *
+ * The default is deny. Every allowance below is deliberate.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ---------------------------------------------------------------- */
+    /* Helpers                                                           */
+    /* ---------------------------------------------------------------- */
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    /**
+     * Admin claims are set on the Auth user by the server. Reading the admins
+     * collection from a rule would be a document read per request, so the role
+     * travels in the token instead.
+     */
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function hasRole(role) {
+      return isAdmin() && request.auth.token.role == role;
+    }
+
+    function isSuperAdmin() {
+      return hasRole('super_admin');
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Catalog — published data is world-readable, writes are server-only */
+    /* ---------------------------------------------------------------- */
+
+    match /products/{productId} {
+      // The app only ever needs active products; drafts and archived items
+      // stay invisible to clients.
+      allow read: if resource.data.availability.status == 'active' || isAdmin();
+      allow write: if false;
+    }
+
+    match /categories/{categoryId} {
+      allow read: if resource.data.status == 'active' || isAdmin();
+      allow write: if false;
+    }
+
+    match /banners/{bannerId} {
+      allow read: if resource.data.status == 'live' || isAdmin();
+      allow write: if false;
+    }
+
+    match /offers/{offerId} {
+      allow read: if resource.data.status == 'active' || isAdmin();
+      allow write: if false;
+    }
+
+    match /coupons/{couponId} {
+      // Coupon rules are applied server-side at checkout; clients never read
+      // the full coupon book, which would leak unlaunched promotions.
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /societies/{societyId} {
+      allow read: if resource.data.active == true || isAdmin();
+      allow write: if false;
+    }
+
+    match /vendors/{vendorId} {
+      allow read: if resource.data.status == 'active' || isAdmin();
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Orders — a customer sees only their own                           */
+    /* ---------------------------------------------------------------- */
+
+    match /orders/{orderId} {
+      allow read: if isAdmin() || isOwner(resource.data.customer.uid);
+
+      // Order placement and every status change go through the server, so the
+      // client SDK never writes an order directly.
+      allow create, update, delete: if false;
+
+      match /events/{eventId} {
+        allow read: if isAdmin()
+          || isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.customer.uid);
+        allow write: if false;
+      }
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Voice orders — audio must never be publicly enumerable            */
+    /* ---------------------------------------------------------------- */
+
+    match /voiceOrders/{voiceOrderId} {
+      allow read: if isAdmin() || isOwner(resource.data.customer.uid);
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Customers — own profile only                                      */
+    /* ---------------------------------------------------------------- */
+
+    match /customers/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      // Profile edits go through the server so they can be validated and
+      // audited; the client cannot change its own lifetime value or status.
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Support                                                           */
+    /* ---------------------------------------------------------------- */
+
+    match /supportConversations/{conversationId} {
+      allow read: if isAdmin() || isOwner(resource.data.customer.uid);
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Notifications                                                     */
+    /* ---------------------------------------------------------------- */
+
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.audience == 'customer');
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* App config — read-only feature flags for the app                  */
+    /* ---------------------------------------------------------------- */
+
+    match /appConfig/{document} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Operational and security collections — no client access at all    */
+    /* ---------------------------------------------------------------- */
+
+    match /inventoryMovements/{movementId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /auditLogs/{entryId} {
+      // The audit trail is append-only and written by the server alone. Even a
+      // super admin cannot edit or delete an entry.
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    match /admins/{uid} {
+      allow read: if isSuperAdmin() || isOwner(uid);
+      allow write: if false;
+    }
+
+    match /mediaLibrary/{assetId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Anything not matched above is denied                              */
+    /* ---------------------------------------------------------------- */
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
