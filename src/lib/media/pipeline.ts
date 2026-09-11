@@ -8,6 +8,12 @@ import {
   type RembgModel,
 } from "./background-removal";
 import { paletteFromCanvas } from "./extract-palette";
+import {
+  judgeCutout,
+  planRemoval,
+  removeFlatBackground,
+  type RemovalMethod,
+} from "./flat-background";
 import { proxiedImageUrl } from "./providers/hosts";
 import { FALLBACK_PALETTE, buildPalette, generateCardBackgrounds } from "./palette";
 import {
@@ -53,6 +59,9 @@ export interface PipelineProgress {
 export interface PipelineResult {
   /** The squared source, always present — this is what gets stored. */
   squared: HTMLCanvasElement;
+  /** How the background was dealt with, and why. */
+  method: RemovalMethod;
+  methodReason: string;
   /** The cut-out product, when removal succeeded. */
   cutout: HTMLCanvasElement | null;
   /** What the card shows: the trimmed cutout, or the squared original. */
@@ -70,6 +79,14 @@ export interface PipelineOptions {
   transform?: Transform;
   onProgress?: (progress: PipelineProgress) => void;
   signal?: AbortSignal;
+  /**
+   * What the picture holds. A group photo that fills its frame has no
+   * background to remove, and asking for one anyway is what produces a pear
+   * sliced flat across the middle.
+   */
+  subject?: "single" | "group";
+  /** Forces removal even when the picture looks like it has no background. */
+  forceRemoval?: boolean;
 }
 
 /** Weights for the overall progress bar, so it moves at a believable rate. */
@@ -77,6 +94,24 @@ const WEIGHTS = { load: 8, square: 6, cutout: 72, trim: 4, palette: 10 };
 
 function throwIfAborted(signal: AbortSignal | undefined) {
   if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+}
+
+function pixelsOf(canvas: HTMLCanvasElement): Uint8ClampedArray {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return new Uint8ClampedArray(0);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+}
+
+function canvasFrom(pixels: Uint8ClampedArray, width: number, height: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  // Copied into a fresh ImageData rather than wrapping the array: the buffer
+  // that reaches here is not necessarily one ImageData will accept directly.
+  const image = new ImageData(width, height);
+  image.data.set(pixels);
+  canvas.getContext("2d")?.putImageData(image, 0, 0);
+  return canvas;
 }
 
 /**
@@ -114,48 +149,92 @@ export async function runPipeline(
   throwIfAborted(options.signal);
   done += WEIGHTS.load;
 
-  /* 2. A square canvas, because every product card is square. */
+  /*
+   * 2. A square canvas, because every product card is square.
+   *
+   * How it is fitted depends on what happens next. A picture that keeps its
+   * background wants to fill the tile, so it is cropped to the square; one that
+   * is about to be cut out is fitted whole, so nothing is lost before the
+   * removal has had a chance to look at it.
+   */
   advance(0, "squaring", "Fitting it to the card…");
-  const squared = renderTransformed(image, options.transform ?? DEFAULT_TRANSFORM);
+  const requested = options.transform ?? DEFAULT_TRANSFORM;
+  const probe = renderTransformed(image, requested);
+  const plan = planRemoval(pixelsOf(probe), probe.width, probe.height, {
+    subject: options.subject,
+  });
+  const method: RemovalMethod = options.forceRemoval && plan.method === "none" ? "model" : plan.method;
+
+  const squared =
+    method === "none" && requested.fit === "contain"
+      ? renderTransformed(image, { ...requested, fit: "cover" })
+      : probe;
   throwIfAborted(options.signal);
   done += WEIGHTS.square;
 
-  /* 3. Background removal. A failure here is reported, not thrown. */
+  /* 3. Background removal, by whichever means suits the picture. */
   const cutoutStarted = performance.now();
   let cutout: HTMLCanvasElement | null = null;
   let model: RembgModel | null = null;
   let modelVersion: string | null = null;
   let cutoutFailure: string | null = null;
 
-  try {
-    const blob = await canvasToBlob(squared, "image/png");
-    const result = await removeBackground(blob, {
-      model: options.model ?? DEFAULT_REMBG_MODEL,
-      signal: options.signal,
-      onProgress: (info) => {
-        advance(WEIGHTS.cutout, "cutout", info.message, info.progress / 100);
-      },
-    });
+  if (method === "none") {
+    // Nothing to remove. Said plainly rather than attempted and botched.
+    advance(WEIGHTS.cutout, "cutout", plan.reason);
+  } else if (method === "flat") {
+    advance(WEIGHTS.cutout, "cutout", "Clearing the backdrop…");
+    const cleared = removeFlatBackground(
+      pixelsOf(squared),
+      squared.width,
+      squared.height,
+      plan.background!,
+    );
+    const canvas = canvasFrom(cleared.pixels, squared.width, squared.height);
+    const quality = judgeCutout(cleared.pixels, squared.width, squared.height);
+    if (quality.usable) {
+      cutout = canvas;
+    } else {
+      cutoutFailure = `The backdrop could not be cleared cleanly — ${quality.reason}.`;
+    }
+  } else {
+    try {
+      const blob = await canvasToBlob(squared, "image/png");
+      const result = await removeBackground(blob, {
+        model: options.model ?? DEFAULT_REMBG_MODEL,
+        signal: options.signal,
+        onProgress: (info) => {
+          advance(WEIGHTS.cutout, "cutout", info.message, info.progress / 100);
+        },
+      });
 
-    const { element } = await loadImage(result.objectUrl, false);
-    const canvas = document.createElement("canvas");
-    canvas.width = element.naturalWidth;
-    canvas.height = element.naturalHeight;
-    canvas.getContext("2d")?.drawImage(element, 0, 0);
-    URL.revokeObjectURL(result.objectUrl);
+      const { element } = await loadImage(result.objectUrl, false);
+      const canvas = document.createElement("canvas");
+      canvas.width = element.naturalWidth;
+      canvas.height = element.naturalHeight;
+      canvas.getContext("2d")?.drawImage(element, 0, 0);
+      URL.revokeObjectURL(result.objectUrl);
 
-    cutout = canvas;
-    model = result.model;
-    modelVersion = result.modelVersion;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    cutoutFailure =
-      error instanceof BackgroundRemovalUnavailableError
-        ? error.message
-        : error instanceof Error
+      // The model always returns a mask, including when it could not read the
+      // picture. Judging the result is the only way to tell those apart.
+      const quality = judgeCutout(pixelsOf(canvas), canvas.width, canvas.height);
+      if (quality.usable) {
+        cutout = canvas;
+        model = result.model;
+        modelVersion = result.modelVersion;
+      } else {
+        cutoutFailure = `The cutout came out wrong — ${quality.reason}, so the photo is used as it is.`;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      cutoutFailure =
+        error instanceof BackgroundRemovalUnavailableError
           ? error.message
-          : "The background could not be removed.";
-    console.warn(`[hashmimart-admin] cutout skipped: ${cutoutFailure}`);
+          : error instanceof Error
+            ? error.message
+            : "The background could not be removed.";
+      console.warn(`[hashmimart-admin] cutout skipped: ${cutoutFailure}`);
+    }
   }
   const cutoutMs = Math.round(performance.now() - cutoutStarted);
   done += WEIGHTS.cutout;
@@ -178,6 +257,8 @@ export async function runPipeline(
 
   return {
     squared,
+    method,
+    methodReason: plan.reason,
     cutout,
     display,
     palette,

@@ -7,9 +7,11 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Info,
   Loader2,
   RotateCcw,
   RotateCw,
+  Scissors,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +24,8 @@ import { loadForEditing, runPipeline, autoPalette, type PipelineProgress } from 
 import { composeCollage, type CategoryArtSource } from "@/lib/media/collage";
 import { removeBackground } from "@/lib/media/background-removal";
 import { extractSwatchesFromCanvas } from "@/lib/media/extract-palette";
+import { scoreGroupShot } from "@/lib/media/group-shot";
+import type { RemovalMethod } from "@/lib/media/flat-background";
 import type { ExtractedSwatches } from "@/lib/media/quantize";
 import type { MediaPalette, ProductMedia, ProviderImageResult } from "@/types";
 import type { RembgModel } from "@/lib/media/model-catalog";
@@ -60,6 +64,11 @@ interface Selection {
   editableUrl: string;
   /** How many products went into a composed tile. */
   composedFrom?: number;
+  /**
+   * Whether the chosen photo holds one item or many. A group photo that fills
+   * its frame has no background to remove.
+   */
+  subject: "single" | "group";
 }
 
 async function uploadBlob(
@@ -129,6 +138,7 @@ export function MediaStudio({
   const [palette, setPalette] = useState<MediaPalette | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [timings, setTimings] = useState<{ total: number; cutout: number } | null>(null);
+  const [method, setMethod] = useState<{ method: RemovalMethod; reason: string } | null>(null);
 
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +162,7 @@ export function MediaStudio({
     setPalette(null);
     setPreviewUrl("");
     setTimings(null);
+    setMethod(null);
     setProgress(null);
     setError(null);
     setFineTune(false);
@@ -184,7 +195,13 @@ export function MediaStudio({
 
   /** The whole automatic run. Called on selection and on every re-run. */
   const process = useCallback(
-    async (source: HTMLImageElement, nextTransform: Transform, nextModel: RembgModel) => {
+    async (
+      source: HTMLImageElement,
+      nextTransform: Transform,
+      nextModel: RembgModel,
+      subject: "single" | "group" = "single",
+      forceRemoval = false,
+    ) => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -197,11 +214,14 @@ export function MediaStudio({
         const result = await runPipeline(source, {
           model: nextModel,
           transform: nextTransform,
+          subject,
+          forceRemoval,
           signal: controller.signal,
           onProgress: setProgress,
         });
 
         setSquared(result.squared);
+        setMethod({ method: result.method, reason: result.methodReason });
         setCutout({
           canvas: result.cutout,
           model: result.model,
@@ -233,7 +253,7 @@ export function MediaStudio({
         const loaded = await loadForEditing(next.editableUrl);
         setImage(loaded);
         setTransform(DEFAULT_TRANSFORM);
-        await process(loaded, DEFAULT_TRANSFORM, model);
+        await process(loaded, DEFAULT_TRANSFORM, model, next.subject);
       } catch (err) {
         setError(
           err instanceof Error
@@ -267,6 +287,7 @@ export function MediaStudio({
         kind: "provider",
         result,
         editableUrl: result.fullUrl,
+        subject: scoreGroupShot(result).verdict === "group" ? "group" : "single",
       });
     },
     [begin],
@@ -276,7 +297,7 @@ export function MediaStudio({
     (file: File) => {
       const url = URL.createObjectURL(file);
       objectUrls.current.push(url);
-      void begin({ kind: "upload", editableUrl: url });
+      void begin({ kind: "upload", editableUrl: url, subject: "single" });
     },
     [begin],
   );
@@ -297,7 +318,7 @@ export function MediaStudio({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      setSelection({ kind: "collage", editableUrl: "", composedFrom: chosen.length });
+      setSelection({ kind: "collage", editableUrl: "", composedFrom: chosen.length, subject: "group" });
       setImage(null);
       setStage("working");
       setError(null);
@@ -342,6 +363,7 @@ export function MediaStudio({
         }
 
         setProgress({ step: "trimming", progress: 92, message: "Arranging them…" });
+        setMethod({ method: "none", reason: "" });
         const composed = composeCollage(pieces);
         const display = trimTransparent(composed);
 
@@ -383,13 +405,13 @@ export function MediaStudio({
   );
 
   const rerun = useCallback(
-    (nextTransform: Transform, nextModel: RembgModel) => {
+    (nextTransform: Transform, nextModel: RembgModel, forceRemoval = false) => {
       if (!image) return;
       setTransform(nextTransform);
       setModel(nextModel);
-      void process(image, nextTransform, nextModel);
+      void process(image, nextTransform, nextModel, selection?.subject ?? "single", forceRemoval);
     },
-    [image, process],
+    [image, process, selection],
   );
 
   const rotate = (delta: number) =>
@@ -565,6 +587,12 @@ export function MediaStudio({
             emoji={emoji}
             cutout={cutout}
             timings={timings}
+            method={method}
+            onForceRemoval={
+              method?.method === "none" && selection?.kind !== "collage"
+                ? () => rerun(transform, model, true)
+                : undefined
+            }
             composedFrom={selection?.kind === "collage" ? selection.composedFrom : undefined}
             existing={existing}
           />
@@ -741,6 +769,8 @@ function ResultPanel({
   emoji,
   cutout,
   timings,
+  method,
+  onForceRemoval,
   composedFrom,
   existing,
 }: {
@@ -753,6 +783,9 @@ function ResultPanel({
   emoji: string | null;
   cutout: CutoutOutcome;
   timings: { total: number; cutout: number } | null;
+  method: { method: RemovalMethod; reason: string } | null;
+  /** Offered only when removal was skipped by choice, not by failure. */
+  onForceRemoval?: () => void;
   /** Set when the picture was built from the category's own products. */
   composedFrom?: number;
   existing?: ProductMedia | null;
@@ -769,8 +802,12 @@ function ResultPanel({
   const backgroundRow = composedFrom
     ? `Arranged from ${composedFrom} product${composedFrom === 1 ? "" : "s"}, each cut out`
     : cutout.canvas
-      ? `Removed — ${modelLabel ?? "already cut out"}`
-      : "Kept (removal did not run)";
+      ? method?.method === "flat"
+        ? "Plain backdrop cleared exactly"
+        : `Removed — ${modelLabel ?? "already cut out"}`
+      : method?.method === "none"
+        ? "Kept — the picture has no background to remove"
+        : "Kept (removal did not work)";
 
   const rows: [string, string][] = [
     ["Background", backgroundRow],
@@ -800,12 +837,28 @@ function ResultPanel({
       </div>
 
       <div className="flex-1">
-        {cutout.failureReason ? (
+        {method?.method === "none" && !cutout.failureReason ? (
+          <div className="mb-3 rounded-[var(--hm-radius-control)] border border-[var(--hm-cyan-100)] bg-[var(--hm-cyan-50)] px-3 py-2.5 text-[12.5px] text-[var(--hm-cyan-800)]">
+            <p className="flex items-start gap-2">
+              <Info className="mt-px size-4 shrink-0" />
+              <span>
+                {method.reason} The photo is used as it is, cropped to fill the tile, and the
+                colours come from all of it.
+              </span>
+            </p>
+            {onForceRemoval ? (
+              <Button variant="ghost" size="sm" className="mt-1.5" onClick={onForceRemoval}>
+                <Scissors className="size-3.5" />
+                Cut it out anyway
+              </Button>
+            ) : null}
+          </div>
+        ) : cutout.failureReason ? (
           <p className="mb-3 flex items-start gap-2 rounded-[var(--hm-radius-control)] border border-[var(--hm-warning-100)] bg-[var(--hm-warning-50)] px-3 py-2.5 text-[12.5px] text-[var(--hm-warning-700)]">
             <AlertTriangle className="mt-px size-4 shrink-0" />
             <span>
-              The background could not be removed, so the photo is used as it is and the colours
-              come from the whole picture. {cutout.failureReason}
+              {cutout.failureReason} The photo is used as it is, and the colours come from the
+              whole picture.
             </span>
           </p>
         ) : (

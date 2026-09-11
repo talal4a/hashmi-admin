@@ -193,6 +193,21 @@ rather than the product.
 - Background removal runs in the admin's browser via `@bunnio/rembg-web` over
   `onnxruntime-web`, so there is no per-image cost. Progress is real — it comes
   from the inference callback, never a timer.
+- **Removal is planned before it is attempted.** `flat-background.ts` reads the
+  border ring of the picture first. A studio backdrop — a border that agrees
+  with itself — is flood-filled away exactly: faster than the model, cleaner at
+  the edges (8.5% partial pixels against the model's 23.7%), and it cannot eat
+  the white of a garlic bulb because a flood cannot reach what the product
+  encloses. A picture whose border is as busy as its middle *has no background*,
+  and a remover asked to find one will invent a subject: measured on three real
+  assortment photos, u2netp kept 22-32% and sliced a flat line where the pile
+  met the table, and IS-Net was worse, reducing a bowl of berries to one
+  blueberry and one blackberry. Those are used as they are, cropped to fill the
+  tile, with a "cut it out anyway" override.
+- **Every cutout is judged before it is used.** The model always returns a mask,
+  including when it could not read the picture. `judgeCutout` rejects one that
+  erased nearly everything, removed nothing, or came back as a half-transparent
+  smear, and the photo is used instead.
 - **Inference is pinned to the WASM execution provider.** Every U2Net-family
   model pools with `ceil_mode` enabled — `u2netp.onnx` alone has 33 such
   layers — and onnxruntime-web's WebGPU MaxPool kernel computes that output
