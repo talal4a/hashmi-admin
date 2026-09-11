@@ -66,8 +66,10 @@ export const productDraftSchema = z.object({
   slug: z
     .string()
     .trim()
-    .min(2)
-    .max(80)
+    // The form fills this in from the name, so an empty slug almost always
+    // means an empty name; say that rather than "expected >= 2 characters".
+    .min(2, "A slug is required — it fills in from the product name")
+    .max(80, "Slug must be 80 characters or fewer")
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens"),
   sku: z.string().trim().min(2, "SKU is required").max(40),
   barcode: z.string().trim().max(40).nullable().optional(),
@@ -162,7 +164,27 @@ export interface ProductChecklist {
   media: boolean;
   pricingInventory: boolean;
   publishable: boolean;
+  /** At most one issue per field, so `path` identifies an entry uniquely. */
   issues: { path: string; message: string }[];
+}
+
+/**
+ * Keeps the first complaint about each field.
+ *
+ * One field can break several rules at once — an empty slug is both too short
+ * and not in slug format — and the checklist has room for five lines. Spending
+ * two of them saying the same thing about one input helps nobody, and made
+ * `path` a duplicate React key into the bargain.
+ */
+function firstIssuePerField(
+  issues: { path: string; message: string }[],
+): { path: string; message: string }[] {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    if (seen.has(issue.path)) return false;
+    seen.add(issue.path);
+    return true;
+  });
 }
 
 export function evaluateProduct(input: unknown): ProductChecklist {
@@ -180,7 +202,9 @@ export function evaluateProduct(input: unknown): ProductChecklist {
   const publish = productPublishSchema.safeParse(input);
   const issues = publish.success
     ? []
-    : publish.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+    : firstIssuePerField(
+        publish.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      );
 
   return { basics, media, pricingInventory, publishable: publish.success, issues };
 }

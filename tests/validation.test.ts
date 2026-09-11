@@ -143,6 +143,22 @@ describe("evaluateProduct checklist", () => {
     expect(() => evaluateProduct({ nonsense: true })).not.toThrow();
     expect(evaluateProduct({ nonsense: true }).basics).toBe(false);
   });
+
+  it("reports each field once, however many rules it breaks", () => {
+    // An empty slug is both too short and not in slug format. The checklist
+    // renders one line per entry keyed by path, so two entries for one field
+    // both wasted a line and produced a duplicate React key.
+    const checklist = evaluateProduct({ ...draft, name: "", slug: "" });
+    const paths = checklist.issues.map((issue) => issue.path);
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(paths.filter((path) => path === "slug")).toHaveLength(1);
+  });
+
+  it("explains an empty slug in terms of the name it comes from", () => {
+    const checklist = evaluateProduct({ ...draft, slug: "" });
+    const slugIssue = checklist.issues.find((issue) => issue.path === "slug");
+    expect(slugIssue?.message).toMatch(/fills in from the product name/);
+  });
 });
 
 describe("bulkActionSchema", () => {
