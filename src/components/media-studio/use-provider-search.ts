@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { rankGroupShots } from "@/lib/media/group-shot";
 import type { ProviderImageResult } from "@/types";
 
 export type ProviderTab = "all" | "pixabay" | "pexels" | "unsplash";
@@ -19,8 +20,14 @@ const MIN_QUERY = 2;
  * Debounced provider search (PRD §5.2): 350ms debounce, minimum two characters,
  * stale requests cancelled, and paging that appends rather than replaces.
  */
-export function useProviderSearch() {
+export function useProviderSearch(options: { groupFirst?: boolean } = {}) {
   const [query, setQuery] = useState("");
+  /**
+   * Assortments first. On by default for category art, where a photo of one
+   * strawberry is never the right answer, and off for products, where it
+   * usually is.
+   */
+  const [groupFirst, setGroupFirst] = useState(options.groupFirst ?? false);
   const [tab, setTab] = useState<ProviderTab>("all");
   const [results, setResults] = useState<ProviderImageResult[]>([]);
   const [statuses, setStatuses] = useState<ProviderStatus[]>([]);
@@ -130,12 +137,19 @@ export function useProviderSearch() {
     void run(trimmed, tab, next, true);
   }, [query, tab, page, loading, loadingMore, run]);
 
+  const ordered = useMemo(
+    () => (groupFirst ? rankGroupShots(results) : results),
+    [results, groupFirst],
+  );
+
   return {
     query,
     setQuery,
     tab,
     setTab,
-    results,
+    groupFirst,
+    setGroupFirst,
+    results: ordered,
     statuses,
     loading,
     loadingMore,

@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils/cn";
 import { FALLBACK_PALETTE } from "@/lib/media/palette";
 import { DEFAULT_REMBG_MODEL, MODEL_LIST, disposeRembg } from "@/lib/media/background-removal";
 import { loadForEditing, runPipeline, autoPalette, type PipelineProgress } from "@/lib/media/pipeline";
+import { composeCollage, type CategoryArtSource } from "@/lib/media/collage";
+import { removeBackground } from "@/lib/media/background-removal";
 import { extractSwatchesFromCanvas } from "@/lib/media/extract-palette";
 import type { ExtractedSwatches } from "@/lib/media/quantize";
 import type { MediaPalette, ProductMedia, ProviderImageResult } from "@/types";
@@ -32,6 +34,7 @@ import {
   DEFAULT_TRANSFORM,
   canvasToBlob,
   previewDataUrl,
+  renderTransformed,
   trimTransparent,
   type Transform,
 } from "./image-utils";
@@ -51,10 +54,12 @@ import {
 type Stage = "pick" | "working" | "ready";
 
 interface Selection {
-  kind: "provider" | "upload";
+  kind: "provider" | "upload" | "collage";
   result?: ProviderImageResult;
   /** What the canvas loads: an object URL, or the same-origin proxy. */
   editableUrl: string;
+  /** How many products went into a composed tile. */
+  composedFrom?: number;
 }
 
 async function uploadBlob(
@@ -88,6 +93,8 @@ export function MediaStudio({
   emoji,
   existing,
   title = "Product image",
+  mode = "product",
+  artSources = [],
 }: {
   open: boolean;
   onClose: () => void;
@@ -99,6 +106,10 @@ export function MediaStudio({
   emoji: string | null;
   existing?: ProductMedia | null;
   title?: string;
+  /** Category art is searched and composed differently from a product packshot. */
+  mode?: "product" | "category";
+  /** This category's products, for building the tile out of their cutouts. */
+  artSources?: CategoryArtSource[];
 }) {
   const [stage, setStage] = useState<Stage>("pick");
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -270,6 +281,95 @@ export function MediaStudio({
     [begin],
   );
 
+  /**
+   * Builds the category tile out of the category's own products.
+   *
+   * This path skips the usual pipeline: the pieces are already cut out by the
+   * time they are arranged, so running removal over the finished arrangement
+   * would only chew at its edges. Everything after that — trimming, reading the
+   * colours, choosing the card background — is the same as any other picture.
+   */
+  const buildCollage = useCallback(
+    async (chosen: CategoryArtSource[]) => {
+      if (chosen.length === 0) return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setSelection({ kind: "collage", editableUrl: "", composedFrom: chosen.length });
+      setImage(null);
+      setStage("working");
+      setError(null);
+
+      const total = chosen.length;
+      const started = performance.now();
+      try {
+        const pieces: HTMLImageElement[] = [];
+
+        for (const [index, source] of chosen.entries()) {
+          const step = Math.round((index / total) * 88);
+          setProgress({
+            step: "loading",
+            progress: step,
+            message: `Preparing ${source.name} (${index + 1} of ${total})…`,
+          });
+
+          const loaded = await loadForEditing(source.imageUrl);
+          if (controller.signal.aborted) return;
+
+          if (source.hasCutout) {
+            pieces.push(loaded);
+            continue;
+          }
+
+          // No cutout stored: remove the background now, so a product that was
+          // never processed does not drop a white box into the arrangement.
+          const square = renderTransformed(loaded, DEFAULT_TRANSFORM);
+          const result = await removeBackground(await canvasToBlob(square, "image/png"), {
+            signal: controller.signal,
+            onProgress: (info) =>
+              setProgress({
+                step: "cutout",
+                progress: step + Math.round((info.progress / 100) * (88 / total)),
+                message: `Removing the background from ${source.name}…`,
+              }),
+          });
+          const cut = await loadForEditing(result.objectUrl);
+          URL.revokeObjectURL(result.objectUrl);
+          if (controller.signal.aborted) return;
+          pieces.push(cut);
+        }
+
+        setProgress({ step: "trimming", progress: 92, message: "Arranging them…" });
+        const composed = composeCollage(pieces);
+        const display = trimTransparent(composed);
+
+        setProgress({ step: "palette", progress: 96, message: "Reading the colours…" });
+        setSquared(composed);
+        setCutout({
+          canvas: composed,
+          model: null,
+          modelVersion: null,
+          failureReason: null,
+          skipped: false,
+        });
+        adoptResult(display, autoPalette(display), extractSwatchesFromCanvas(display));
+        setTimings({ total: Math.round(performance.now() - started), cutout: 0 });
+        setStage("ready");
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setError(
+          err instanceof Error ? err.message : "Those products could not be arranged into a picture.",
+        );
+        setStage("pick");
+      } finally {
+        setProgress(null);
+      }
+    },
+    [adoptResult],
+  );
+
   /* --- Fine-tune: recompute from a hand-edited cutout ------------------ */
 
   const applyCutout = useCallback(
@@ -345,12 +445,22 @@ export function MediaStudio({
 
       const media: ProductMedia = {
         source: {
-          provider: selection.kind === "upload" ? "upload" : (result?.provider ?? "library"),
+          // A composed tile comes from the shop's own catalogue, not a provider.
+          provider:
+            selection.kind === "collage"
+              ? "library"
+              : selection.kind === "upload"
+                ? "upload"
+                : (result?.provider ?? "library"),
           providerId: result?.id ?? null,
           sourcePageUrl: result?.sourcePageUrl ?? null,
           author: result?.author ?? null,
           authorUrl: result?.authorUrl ?? null,
-          attributionText: result?.attributionText ?? "Uploaded by HashmiMart staff",
+          attributionText:
+            result?.attributionText ??
+            (selection.kind === "collage"
+              ? `Arranged from ${selection.composedFrom} HashmiMart product images`
+              : "Uploaded by HashmiMart staff"),
           hotlinkOnly,
           licenseNote: hotlinkOnly
             ? "Unsplash API terms require the hotlinked URL to be rendered rather than a re-hosted copy."
@@ -390,9 +500,11 @@ export function MediaStudio({
           <span className="text-[11.5px] text-[var(--hm-ink-400)]">
             {selection?.result
               ? selection.result.attributionText
-              : selection
-                ? "Uploaded image — ownership is clear"
-                : "No image chosen yet"}
+              : selection?.kind === "collage"
+                ? `Built from ${selection.composedFrom} of this category's own products`
+                : selection
+                  ? "Uploaded image — ownership is clear"
+                  : "No image chosen yet"}
           </span>
           <div className="flex items-center gap-2">
             {stage === "ready" ? (
@@ -430,8 +542,11 @@ export function MediaStudio({
         <div className="min-h-[420px]">
           <SourcePicker
             productName={productName}
+            mode={mode}
+            artSources={artSources}
             onSelectProvider={selectProvider}
             onSelectUpload={selectUpload}
+            onSelectCollage={mode === "category" ? (chosen) => void buildCollage(chosen) : undefined}
           />
         </div>
       ) : null}
@@ -450,6 +565,7 @@ export function MediaStudio({
             emoji={emoji}
             cutout={cutout}
             timings={timings}
+            composedFrom={selection?.kind === "collage" ? selection.composedFrom : undefined}
             existing={existing}
           />
 
@@ -625,6 +741,7 @@ function ResultPanel({
   emoji,
   cutout,
   timings,
+  composedFrom,
   existing,
 }: {
   previewUrl: string;
@@ -636,14 +753,27 @@ function ResultPanel({
   emoji: string | null;
   cutout: CutoutOutcome;
   timings: { total: number; cutout: number } | null;
+  /** Set when the picture was built from the category's own products. */
+  composedFrom?: number;
   existing?: ProductMedia | null;
 }) {
   const modelLabel = cutout.model
     ? (MODEL_LIST.find((m) => m.id === cutout.model)?.label ?? cutout.model)
     : null;
 
+  /*
+   * A composed tile has no single model behind it — each piece was cut out on
+   * its own, or was already a cutout — so naming one would be a fiction, and
+   * naming none printed "Removed — null".
+   */
+  const backgroundRow = composedFrom
+    ? `Arranged from ${composedFrom} product${composedFrom === 1 ? "" : "s"}, each cut out`
+    : cutout.canvas
+      ? `Removed — ${modelLabel ?? "already cut out"}`
+      : "Kept (removal did not run)";
+
   const rows: [string, string][] = [
-    ["Background", cutout.canvas ? `Removed — ${modelLabel}` : "Kept (removal did not run)"],
+    ["Background", backgroundRow],
     ["Card colour", palette?.cardBg ?? "—"],
     ["Text colour", palette?.textColor ?? "—"],
     ["Dominant colour", palette?.dominant ?? "not detected"],

@@ -227,6 +227,32 @@ and before `dev` and `build`. Both directories are generated and git-ignored.
 thing for real on a picture it draws itself — provider search, the proxy, the
 model, an actual cutout, an actual colour read — and names the step that failed.
 
+### Category pictures
+
+A category tile wants a pile of mixed goods, not one strawberry on white, and a
+plain search gives mostly the latter — measured against the live providers,
+"fruits" returned two group photos in ten. Three things address that, and the
+first two are worth more than the third:
+
+1. **A better question.** A category search opens on `<name> assortment` rather
+   than the bare name. Same measurement: seven group photos in eight. The
+   alternatives are offered as chips; "collection" is not among them, because it
+   drifted a fruit search onto walnuts.
+2. **Assortments first.** `src/lib/media/group-shot.ts` scores each result from
+   the text the providers already send — Pixabay's tags, Pexels' and Unsplash's
+   descriptions — and sorts group photos above single items, badging them so the
+   order is explained rather than mysterious. With both in play the first eight
+   results were eight group photos. The scale is deliberately coarse: a finer
+   one rewarded Pixabay's long tag lists over the single sentence the others
+   send, and one provider took over the top of the grid.
+3. **Build it from the catalogue instead.** Every product that has been through
+   the media studio has a background-free cutout, so a category's tile can be
+   composed from its own products — the arrangement in
+   `src/lib/media/collage.ts`, the picker under the *From this category* tab.
+   Products that have no cutout yet get one on the way through. This is the only
+   option that shows the shop's actual goods, so it is where the studio opens
+   when the category has products with pictures.
+
 ---
 
 ## Environment variables

@@ -31,6 +31,7 @@ import {
   saveCategoryAction,
   toggleCategoryVisibilityAction,
 } from "@/server/actions/categories";
+import type { CategoryArtSource } from "@/lib/media/collage";
 import type { Category, ProductMedia } from "@/types";
 
 interface Editing {
@@ -84,9 +85,12 @@ function toEditing(category: Category): Editing {
 
 export function CategoryManager({
   categories,
+  artSources = [],
   canWrite,
 }: {
   categories: Category[];
+  /** Every product picture in the catalogue, narrowed per category below. */
+  artSources?: CategoryArtSource[];
   canWrite: boolean;
 }) {
   const router = useRouter();
@@ -405,7 +409,7 @@ export function CategoryManager({
         open={editing !== null}
         onClose={() => setEditing(null)}
         title={editing?.id ? "Edit category" : "Add category"}
-        description="Category art can be searched or uploaded. Background removal is optional here."
+        description="Build the picture from this category's own products, or search the photo libraries."
         size="lg"
         footer={
           <>
@@ -524,7 +528,9 @@ export function CategoryManager({
                   <p className="text-[13px] text-[var(--hm-ink-700)]">
                     {editing.media
                       ? `${editing.media.source.provider} · card ${editing.media.palette.cardBg}`
-                      : "No image set — the icon is used as the fallback."}
+                      : editing.id
+                        ? "No image set — the icon is used. This category's own products can be arranged into one."
+                        : "No image set — the icon is used as the fallback."}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={() => setStudioOpen(true)}>
@@ -560,7 +566,13 @@ export function CategoryManager({
           compareAtPrice={null}
           emoji={editing.icon || null}
           existing={editing.media}
-          title="Category media studio"
+          title="Category picture"
+          mode="category"
+          // Only this category's own products, and only once it has been saved
+          // and has an id to match them against.
+          artSources={
+            editing.id ? artSources.filter((s) => s.categoryId === editing.id) : []
+          }
         />
       ) : null}
 

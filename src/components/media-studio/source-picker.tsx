@@ -1,18 +1,23 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { AlertCircle, ExternalLink, Loader2, Search, Upload, X } from "lucide-react";
+import { AlertCircle, ExternalLink, Images, Loader2, Search, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/field";
 import { EmptyState, Skeleton } from "@/components/ui/states";
 import { cn } from "@/lib/utils/cn";
 import { MAX_UPLOAD_BYTES } from "./constants";
+import type { CategoryArtSource } from "@/lib/media/collage";
+import { assortmentQueries, scoreGroupShot } from "@/lib/media/group-shot";
+import { CollagePicker } from "./collage-picker";
 import { useProviderSearch, type ProviderTab } from "./use-provider-search";
 import type { ProviderImageResult } from "@/types";
 
-const TABS: { id: ProviderTab | "upload"; label: string }[] = [
+type TabId = ProviderTab | "upload" | "collage";
+
+const TABS: { id: TabId; label: string }[] = [
   { id: "all", label: "All" },
   { id: "pixabay", label: "Pixabay" },
   { id: "pexels", label: "Pexels" },
@@ -31,19 +36,55 @@ const STAGGER_CAP = 24;
 
 export function SourcePicker({
   productName,
+  mode = "product",
+  artSources = [],
   onSelectProvider,
   onSelectUpload,
+  onSelectCollage,
 }: {
   productName?: string;
+  /**
+   * Category art is a different job from a product packshot: it wants a pile of
+   * mixed goods, so the search opens differently and sorts differently.
+   */
+  mode?: "product" | "category";
+  /** Products of this category, for building the tile out of their cutouts. */
+  artSources?: CategoryArtSource[];
   onSelectProvider: (result: ProviderImageResult) => void;
   onSelectUpload: (file: File) => void;
+  onSelectCollage?: (sources: CategoryArtSource[]) => void;
 }) {
   const reduced = useReducedMotion();
-  const search = useProviderSearch();
-  const [uploadTab, setUploadTab] = useState(false);
+  const isCategory = mode === "category";
+  const search = useProviderSearch({ groupFirst: isCategory });
+  const [panel, setPanel] = useState<"search" | "upload" | "collage">(
+    // A category with its own photographed products can build a better tile
+    // than any stock library, so that is where it opens.
+    isCategory && artSources.length > 0 ? "collage" : "search",
+  );
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const suggestions = useMemo(
+    () => (isCategory ? assortmentQueries(productName ?? "") : []),
+    [isCategory, productName],
+  );
+
+  /*
+   * A category search opens on "<name> assortment" rather than the bare name.
+   * Measured against the live providers, the bare name returned two group
+   * photos in ten and this wording returned seven in eight, so it is the
+   * difference between the admin scrolling and the admin choosing.
+   */
+  const seeded = useRef(false);
+  const setQuery = search.setQuery;
+  useEffect(() => {
+    if (seeded.current || !isCategory || suggestions.length === 0) return;
+    seeded.current = true;
+    // Deferred so the first state update lands after the effect body.
+    queueMicrotask(() => setQuery(suggestions[0]));
+  }, [isCategory, suggestions, setQuery]);
 
   const handleFile = useCallback(
     (file: File | undefined) => {
@@ -66,18 +107,24 @@ export function SourcePicker({
     <div className="flex h-full flex-col gap-3">
       {/* Provider tabs */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {TABS.map((tab) => {
-          const active = tab.id === "upload" ? uploadTab : !uploadTab && search.tab === tab.id;
+        {(isCategory && onSelectCollage
+          ? [{ id: "collage" as TabId, label: "From this category" }, ...TABS]
+          : TABS
+        ).map((tab) => {
+          const active =
+            tab.id === "upload" || tab.id === "collage"
+              ? panel === tab.id
+              : panel === "search" && search.tab === tab.id;
           const status = search.statuses.find((s) => s.provider === tab.id);
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => {
-                if (tab.id === "upload") setUploadTab(true);
+                if (tab.id === "upload" || tab.id === "collage") setPanel(tab.id);
                 else {
-                  setUploadTab(false);
-                  search.setTab(tab.id);
+                  setPanel("search");
+                  search.setTab(tab.id as ProviderTab);
                 }
               }}
               className={cn(
@@ -98,7 +145,9 @@ export function SourcePicker({
         })}
       </div>
 
-      {uploadTab ? (
+      {panel === "collage" && onSelectCollage ? (
+        <CollagePicker sources={artSources} onBuild={onSelectCollage} />
+      ) : panel === "upload" ? (
         <div className="flex flex-1 flex-col">
           <div
             onDragOver={(e) => {
@@ -170,8 +219,31 @@ export function SourcePicker({
             ) : null}
           </div>
 
+          {/* Wordings that measurably return assortments rather than one item. */}
+          {isCategory && suggestions.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11.5px] text-[var(--hm-ink-500)]">Try:</span>
+              {suggestions.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  onClick={() => search.setQuery(term)}
+                  aria-pressed={search.query === term}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[12px] font-semibold transition-colors",
+                    search.query === term
+                      ? "bg-[var(--hm-cyan-600)] text-white"
+                      : "bg-[var(--hm-cyan-50)] text-[var(--hm-cyan-800)] hover:bg-[var(--hm-cyan-100)]",
+                  )}
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {/* Product-name shortcut and recent searches (PRD §5.2) */}
-          {search.query.trim().length < search.minQuery ? (
+          {!isCategory && search.query.trim().length < search.minQuery ? (
             <div className="flex flex-wrap items-center gap-1.5">
               {productName ? (
                 <button
@@ -193,6 +265,19 @@ export function SourcePicker({
                 </button>
               ))}
             </div>
+          ) : null}
+
+          {/* Assortments first — the whole point for a category tile. */}
+          {search.results.length > 0 ? (
+            <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-[var(--hm-ink-600,#475569)]">
+              <input
+                type="checkbox"
+                checked={search.groupFirst}
+                onChange={(e) => search.setGroupFirst(e.target.checked)}
+                className="size-3.5 accent-[var(--hm-cyan-600)]"
+              />
+              Show group photos first
+            </label>
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -243,10 +328,17 @@ export function SourcePicker({
                           className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
                         />
                       </span>
-                      <span className="absolute top-1.5 left-1.5">
+                      <span className="absolute top-1.5 left-1.5 flex gap-1">
                         <Chip tone={PROVIDER_TONE[result.provider]} className="px-1.5 py-0.5 text-[9.5px]">
                           {result.provider}
                         </Chip>
+                        {/* Says why a tile is where it is, instead of just reordering silently. */}
+                        {isCategory && scoreGroupShot(result).verdict === "group" ? (
+                          <Chip tone="cyan" className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9.5px]">
+                            <Images className="size-2.5" />
+                            group
+                          </Chip>
+                        ) : null}
                       </span>
                       <span className="block border-t border-[var(--hm-border)] bg-white px-2 py-1.5">
                         <span className="block truncate text-[11.5px] font-semibold text-[var(--hm-ink-800)]">
