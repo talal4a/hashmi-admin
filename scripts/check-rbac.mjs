@@ -20,6 +20,9 @@ const MODULE_EVIDENCE = {
   // Chosen so it renders for view-only roles too, not just those who can write.
   "/products": "Search name, SKU",
   "/categories": "Category order",
+  // A category's own page is a second door into the same data, so it is
+  // checked as its own module rather than assumed to inherit the list's guard.
+  "/categories/cat-vegetables": "Products in this category",
   "/inventory": "Recent stock movements",
   "/orders": "awaiting action",
   "/voice-orders": "Needs review",
@@ -48,7 +51,7 @@ const ROLES = [
     email: "catalog@hashmimart.example",
     role: "catalog_manager",
     allowed: [
-      "/products", "/categories", "/inventory",
+      "/products", "/categories", "/categories/cat-vegetables", "/inventory",
       "/offers", "/banners", "/vendors", "/analytics",
     ],
   },

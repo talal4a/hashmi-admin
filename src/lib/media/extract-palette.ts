@@ -2,98 +2,83 @@
 
 import type { MediaPalette } from "@/types";
 import { FALLBACK_PALETTE, buildPalette } from "./palette";
+import { EMPTY_SWATCHES, swatchesFromPixels, type ExtractedSwatches } from "./quantize";
+
+export type { ExtractedSwatches };
 
 /**
- * Palette extraction with node-vibrant (PRD §5.4).
+ * Palette extraction from a canvas (PRD §5.4).
  *
- * Runs against the cutout where one exists — so the swatches come from the
- * product itself and not from whatever background the source photo had. The
- * worker pipeline is preferred so a large image does not block the editor; the
- * main-thread pipeline is the fallback.
+ * The pixels come straight from the canvas the pipeline has already produced —
+ * the cutout where there is one, so the swatches describe the product and not
+ * whatever background the stock photo happened to have.
  *
- * Extraction failure is never fatal: the caller receives the HashmiMart pale
- * cyan default, as PRD §16.1 requires.
+ * Failure is never fatal: the caller gets the HashmiMart pale cyan default, as
+ * PRD §16.1 requires.
  */
 
-export interface ExtractedSwatches {
-  dominant: string | null;
-  vibrant: string | null;
-  muted: string | null;
-  light: string | null;
-  dark: string | null;
+/** Sampling one pixel in ~120k keeps a 4000px photo under a few milliseconds. */
+const TARGET_SAMPLES = 24_000;
+
+function strideFor(width: number, height: number): number {
+  return Math.max(1, Math.floor((width * height) / TARGET_SAMPLES));
 }
 
-let workerPipelineReady: boolean | null = null;
+export function extractSwatchesFromCanvas(canvas: HTMLCanvasElement): ExtractedSwatches {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return EMPTY_SWATCHES;
 
-async function configureWorkerPipeline(Vibrant: typeof import("node-vibrant/browser").Vibrant): Promise<void> {
-  if (workerPipelineReady !== null) return;
+  let data: Uint8ClampedArray;
   try {
-    const core = await import("@vibrant/core");
-    const worker = await import("node-vibrant/worker");
-    // The worker export shape differs between builds; only wire it if present.
-    const pipeline = (worker as unknown as { WorkerPipeline?: unknown }).WorkerPipeline;
-    if (pipeline && typeof core.Vibrant?.use === "function") {
-      // `Vibrant.use` is a static registration method, not a React hook.
-      const register = Vibrant.use.bind(Vibrant) as (p: unknown) => void;
-      register(pipeline);
-      workerPipelineReady = true;
-      return;
-    }
+    data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   } catch {
-    // Fall through to the main-thread pipeline.
+    // Only reachable if a caller draws a cross-origin image without the proxy;
+    // the studio routes provider images through /api/media/proxy so it cannot.
+    console.warn("[hashmimart-admin] canvas is tainted — colours cannot be read from it.");
+    return EMPTY_SWATCHES;
   }
-  workerPipelineReady = false;
+
+  return swatchesFromPixels(data, { stride: strideFor(canvas.width, canvas.height) });
 }
 
-export async function extractSwatches(source: string | HTMLImageElement): Promise<ExtractedSwatches> {
-  try {
-    const { Vibrant } = await import("node-vibrant/browser");
-    await configureWorkerPipeline(Vibrant);
-
-    const palette = await Vibrant.from(source as never)
-      .quality(3)
-      .maxColorCount(96)
-      .getPalette();
-
-    const hex = (name: string): string | null => {
-      const swatch = palette[name];
-      return swatch ? swatch.hex.toUpperCase() : null;
-    };
-
-    return {
-      // "Dominant" is the most populated swatch across the returned set.
-      dominant: mostPopulated(palette),
-      vibrant: hex("Vibrant") ?? hex("LightVibrant"),
-      muted: hex("Muted") ?? hex("LightMuted"),
-      light: hex("LightVibrant") ?? hex("LightMuted"),
-      dark: hex("DarkVibrant") ?? hex("DarkMuted"),
-    };
-  } catch (error) {
-    console.warn(
-      "[hashmimart-admin] palette extraction failed:",
-      error instanceof Error ? error.message : error,
-    );
-    return { dominant: null, vibrant: null, muted: null, light: null, dark: null };
-  }
-}
-
-function mostPopulated(palette: Record<string, { hex: string; population: number } | null>): string | null {
-  let best: { hex: string; population: number } | null = null;
-  for (const swatch of Object.values(palette)) {
-    if (!swatch) continue;
-    if (!best || swatch.population > best.population) best = swatch;
-  }
-  return best ? best.hex.toUpperCase() : null;
-}
-
-/** Convenience wrapper returning a persistable palette, never throwing. */
-export async function extractPalette(
-  source: string | HTMLImageElement,
+/** Convenience wrapper returning a persistable palette. Never throws. */
+export function paletteFromCanvas(
+  canvas: HTMLCanvasElement,
   chosenBackground?: string | null,
-): Promise<MediaPalette> {
-  const swatches = await extractSwatches(source);
-  if (!swatches.dominant && !swatches.vibrant) {
+): MediaPalette {
+  const swatches = extractSwatchesFromCanvas(canvas);
+  if (!swatches.dominant) {
     return chosenBackground ? buildPalette({}, chosenBackground) : FALLBACK_PALETTE;
   }
   return buildPalette(swatches, chosenBackground);
+}
+
+/**
+ * Same, from any image source. Used for media already saved on a product, where
+ * only a URL survives. The image is drawn once at a reduced size — the palette
+ * does not need 4000 pixels to find a colour.
+ */
+export async function extractSwatchesFromUrl(url: string): Promise<ExtractedSwatches> {
+  const canvas = await drawToCanvas(url, 320);
+  return canvas ? extractSwatchesFromCanvas(canvas) : EMPTY_SWATCHES;
+}
+
+async function drawToCanvas(url: string, maxEdge: number): Promise<HTMLCanvasElement | null> {
+  const image = await new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+  if (!image) return null;
+
+  const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }

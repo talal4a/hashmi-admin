@@ -6,6 +6,7 @@ import { RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { MediaCheck } from "./media-check";
 import { Chip } from "@/components/ui/chip";
 import { Field, Input, Select, Switch } from "@/components/ui/field";
 import { UnsavedGuard } from "@/components/admin-shell/unsaved-guard";
@@ -442,6 +443,8 @@ export function SettingsView({
             </p>
           </CardBody>
         </Card>
+
+        <MediaCheck />
 
         {canWrite ? (
           <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-end gap-2 rounded-[var(--hm-radius-card)] border border-[var(--hm-border)] bg-white/90 px-4 py-3 shadow-[var(--hm-shadow-md)] backdrop-blur">

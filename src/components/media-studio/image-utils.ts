@@ -153,6 +153,29 @@ export function trimTransparent(canvas: HTMLCanvasElement, padding = 0.04): HTML
   return out;
 }
 
+/**
+ * A small copy of a canvas, for showing on screen.
+ *
+ * A full-resolution PNG data URL of a 1000px cutout is roughly a megabyte of
+ * string held in React state and re-parsed on every render, all to fill a
+ * 150px card. The stored asset still comes from the full-size canvas; only
+ * what the eye sees is scaled down.
+ */
+export function previewDataUrl(canvas: HTMLCanvasElement, maxEdge = 512): string {
+  const longest = Math.max(canvas.width, canvas.height);
+  if (longest <= maxEdge) return canvas.toDataURL("image/png");
+
+  const scale = maxEdge / longest;
+  const small = document.createElement("canvas");
+  small.width = Math.max(1, Math.round(canvas.width * scale));
+  small.height = Math.max(1, Math.round(canvas.height * scale));
+  const ctx = small.getContext("2d");
+  if (!ctx) return canvas.toDataURL("image/png");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(canvas, 0, 0, small.width, small.height);
+  return small.toDataURL("image/png");
+}
+
 export async function blobFromUrl(url: string): Promise<Blob> {
   const response = await fetch(url, { mode: "cors" });
   if (!response.ok) throw new Error("Could not fetch that image.");

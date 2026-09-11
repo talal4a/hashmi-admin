@@ -165,33 +165,60 @@ or removed, and no admin can disable or remove their own account.
 
 ### The media studio
 
-Search or upload → capture attribution → crop/rotate → remove background in the
-browser → extract the palette → generate and choose a card background → preview
-the exact mobile card → upload and persist.
+**The admin picks one picture. Nothing else is asked of them.** Squaring the
+image, removing the background, trimming the empty surround, reading the colours
+off the product and choosing a card background that passes contrast all run
+automatically, in that order, in `src/lib/media/pipeline.ts`. The manual
+stages — crop, rotate, model choice, the erase/restore brush, a colour
+override — are still there, folded away behind "Fine-tune", as an escape hatch
+rather than the route through.
+
+The order matters: the cutout has to exist before the palette is read, because
+colours taken from the untouched photo describe the photographer's backdrop
+rather than the product.
 
 - Provider keys never reach the browser. All three providers are reached only
   through `/api/media/search`, which normalizes results and caches queries for
   24 hours as Pixabay's terms require.
+- **Provider images are loaded through `/api/media/proxy`**, never directly.
+  Canvas work needs same-origin pixels: `cdn.pixabay.com` sends no
+  `Access-Control-Allow-Origin` header at all, and a third-party image either
+  refuses to load or taints the canvas — and a tainted canvas can be neither cut
+  out nor sampled for colour. The proxy fetches only from a fixed host list,
+  checked before *and* after redirects, so it cannot become a general-purpose
+  request forwarder.
 - **Unsplash results stay hotlinked** and fire the required download event, as
   their API guidelines mandate. Pixabay and Pexels selections are copied into
   HashmiMart storage.
 - Background removal runs in the admin's browser via `@bunnio/rembg-web` over
   `onnxruntime-web`, so there is no per-image cost. Progress is real — it comes
   from the inference callback, never a timer.
-- A removal failure never touches the original. The admin can retry with a
-  different model, correct the mask by hand with the erase/restore brush, or
-  skip removal entirely.
+- Colours come from `src/lib/media/quantize.ts`: a median-cut quantiser over the
+  cutout's own RGBA, so transparent pixels are ignored and the swatches describe
+  the product. Being a pure function, it is unit-tested rather than judged by
+  eye.
+- A removal failure never ends the run. The photo is used as it is, the colours
+  are taken from the whole picture instead, and the studio says exactly what
+  happened.
 - Every generated card background is mixed toward white until it clears the
   4.5:1 AA bar against its own computed foreground. There is a test asserting
   this for ten adversarial input colours.
 
-**Serving the models.** Background removal needs the U2Net-family `.onnx`
-artifacts. Place them in `public/models/` (`u2netp.onnx`, `u2net.onnx`,
-`silueta.onnx`, `isnet-general-use.onnx`), or point
-`NEXT_PUBLIC_REMBG_MODEL_BASE_URL` at a CDN. Pin the exact artifact version and
-review each model's licence independently of the wrapper library before
-production. Until an artifact is reachable the studio says so plainly and the
-rest of the pipeline still works.
+**Serving the models.** Nothing needs to be done. `/api/media/model/<file>`
+fetches the pinned `.onnx` artifact on first use, checks it against the byte
+length and SHA-256 in `src/lib/media/model-catalog.ts`, and keeps it on disk;
+every later request is served locally. `npm run fetch-models` does the same
+ahead of time, and a file placed in `public/models/` always wins — which is what
+an air-gapped deployment would use. `NEXT_PUBLIC_REMBG_MODEL_BASE_URL` points
+the browser somewhere else entirely if you would rather serve them from a CDN.
+
+The ONNX Runtime `.wasm` files are copied out of `node_modules` into
+`public/ort/` by `scripts/prepare-media-runtime.mjs`, which runs on `postinstall`
+and before `dev` and `build`. Both directories are generated and git-ignored.
+
+**When something looks wrong,** Settings → *Media pipeline check* runs the whole
+thing for real on a picture it draws itself — provider search, the proxy, the
+model, an actual cutout, an actual colour read — and names the step that failed.
 
 ---
 

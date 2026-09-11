@@ -55,3 +55,11 @@ service-account.json
 serviceAccountKey.json
 firebase-service-account.json
 *-firebase-adminsdk-*.json
+
+# Media studio runtime — generated, never committed.
+# public/ort/ is copied out of node_modules by scripts/prepare-media-runtime.mjs
+# on install; public/models/ holds the pinned ONNX weights, which the server
+# fetches and hash-verifies on first use. Both are large binaries with a
+# reproducible source, so they belong in neither history nor a diff.
+public/ort/
+public/models/

@@ -1,44 +1,39 @@
 "use client";
 
+import {
+  DEFAULT_REMBG_MODEL,
+  MODEL_LIST,
+  MODEL_SPECS,
+  REMBG_MODEL_VERSION,
+  type ModelSpec,
+  type RembgModel,
+} from "./model-catalog";
+
+export { DEFAULT_REMBG_MODEL, MODEL_LIST, MODEL_SPECS, REMBG_MODEL_VERSION };
+export type { ModelSpec, RembgModel };
+
 /**
  * Browser-side background removal (PRD §5.3).
  *
- * Uses @bunnio/rembg-web over onnxruntime-web with a U2Net-family model, so the
+ * `@bunnio/rembg-web` runs a U2Net-family model over onnxruntime-web, so the
  * work happens in the admin's browser and costs nothing per image. WebGPU is
- * used when the browser exposes it, with the WASM/CPU path as the fallback.
+ * used where the browser exposes it, WASM otherwise.
  *
- * Nothing here is loaded until the admin actually asks for a cutout, keeping the
- * model out of the initial dashboard bundle (PRD §13.3). Failure is always
- * recoverable: the original image is untouched and the caller can retry with a
- * different model or skip removal entirely (PRD §16.1).
+ * Both the weights and the WASM runtime are served from this origin — see
+ * `/api/media/model/[file]` — rather than from a public CDN. The earlier build
+ * pointed at `/models`, which nothing ever populated, so every single call fell
+ * straight through to the "model isn't being served" error and no product ever
+ * got a cutout. Serving them ourselves also keeps the feature working on
+ * networks that block third-party CDNs.
+ *
+ * Nothing here is loaded until a cutout is actually requested, keeping the model
+ * runtime out of the dashboard bundle (PRD §13.3). Failure stays recoverable:
+ * the original image is untouched and the caller can retry or skip (PRD §16.1).
  */
-
-export type RembgModel = "u2netp" | "u2net" | "silueta" | "isnet-general-use";
-
-export interface RembgModelOption {
-  id: RembgModel;
-  label: string;
-  note: string;
-}
-
-/**
- * Pin the exact model artifacts you serve, and review each model's licence
- * independently of the wrapper library before production (PRD §5.3, §20).
- */
-export const REMBG_MODELS: RembgModelOption[] = [
-  { id: "u2netp", label: "U2Net-P (fast)", note: "Smallest download, best first choice for packshots." },
-  { id: "u2net", label: "U2Net (accurate)", note: "Slower, cleaner edges on complex products." },
-  { id: "silueta", label: "Silueta", note: "Small U2Net variant; good on simple silhouettes." },
-  { id: "isnet-general-use", label: "IS-Net general", note: "Highest quality, slowest and largest." },
-];
-
-export const DEFAULT_REMBG_MODEL: RembgModel = "u2netp";
-
-/** Version pinned with the model artifacts, recorded in the product document. */
-export const REMBG_MODEL_VERSION = "u2net-family@2024.1";
 
 export interface RemovalProgress {
   step: "downloading" | "processing" | "postprocessing" | "complete";
+  /** 0-100. Comes from the inference callback, never from a timer. */
   progress: number;
   message: string;
 }
@@ -50,21 +45,38 @@ export class BackgroundRemovalUnavailableError extends Error {
   }
 }
 
-/**
- * Where the .onnx artifacts are served from. Defaults to `/models` on this
- * origin — drop the pinned artifacts into `public/models/` — and can be pointed
- * at a CDN with NEXT_PUBLIC_REMBG_MODEL_BASE_URL. The value is a public asset
- * location, never a secret.
- */
+/** Where the pinned `.onnx` artifacts are served from. */
 export function modelBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_REMBG_MODEL_BASE_URL || "/models";
+  return process.env.NEXT_PUBLIC_REMBG_MODEL_BASE_URL || "/api/media/model";
+}
+
+/** Where onnxruntime-web's `.wasm`/`.mjs` files are served from. */
+function ortBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_ORT_BASE_URL || "/ort/";
 }
 
 let configured = false;
 
 async function loadRembg() {
   const rembg = await import("@bunnio/rembg-web");
+
   if (!configured) {
+    // Pin the runtime to this origin before any session is created; ORT reads
+    // this once and then caches its own loader.
+    try {
+      const ort = await import("onnxruntime-web");
+      ort.env.wasm.wasmPaths = ortBaseUrl();
+      // Multi-threaded WASM needs SharedArrayBuffer, which needs the page to be
+      // cross-origin isolated. It is not, so asking for threads here would only
+      // make the runtime probe and fall back. More threads than cores would
+      // also just add contention on a laptop.
+      const isolated = typeof window !== "undefined" && window.crossOriginIsolated === true;
+      const cores = typeof navigator !== "undefined" ? (navigator.hardwareConcurrency ?? 4) : 4;
+      ort.env.wasm.numThreads = isolated ? Math.max(1, Math.min(4, cores - 1)) : 1;
+    } catch {
+      // If ORT cannot be configured it still falls back to its own defaults.
+    }
+
     try {
       rembg.rembgConfig.setBaseUrl(modelBaseUrl());
       const config = rembg.rembgConfig as unknown as {
@@ -77,20 +89,47 @@ async function loadRembg() {
         config.enableWebNN?.(true);
       }
     } catch {
-      // Older builds may not expose every setter; defaults still work.
+      // Older builds may not expose every setter; the defaults still work.
     }
     configured = true;
   }
+
   return rembg;
 }
 
-/** True when a pinned model artifact is actually reachable. */
-export async function isModelAvailable(model: RembgModel): Promise<boolean> {
+export interface ModelAvailability {
+  /** The route answered, so a cutout can be attempted. */
+  reachable: boolean;
+  /** The weights are already on the server's disk — no download wait. */
+  ready: boolean;
+  reason: string | null;
+}
+
+/**
+ * Asks the server whether a model can be served, without moving the bytes.
+ * A HEAD here is cheap; it is what tells the admin "first run will download
+ * 4.4 MB" instead of leaving them watching a silent spinner.
+ */
+export async function checkModel(model: RembgModel): Promise<ModelAvailability> {
+  const spec = MODEL_SPECS[model];
   try {
-    const response = await fetch(`${modelBaseUrl()}/${model}.onnx`, { method: "HEAD" });
-    return response.ok;
+    const response = await fetch(`${modelBaseUrl()}/${spec.file}`, { method: "HEAD" });
+    if (response.status === 401) {
+      return { reachable: false, ready: false, reason: "Your session expired — sign in again." };
+    }
+    if (response.status === 403) {
+      return { reachable: false, ready: false, reason: "Your role cannot process media." };
+    }
+    if (!response.ok) {
+      return {
+        reachable: false,
+        ready: false,
+        reason: `The server could not offer ${spec.file} (HTTP ${response.status}).`,
+      };
+    }
+    return { reachable: true, ready: response.headers.get("X-Model-Ready") === "1", reason: null };
   } catch {
-    return false;
+    return { reachable: false, ready: false, reason: "The server could not be reached." };
   }
 }
 
@@ -111,19 +150,27 @@ export async function removeBackground(
   } = {},
 ): Promise<RemovalResult> {
   const model = options.model ?? DEFAULT_REMBG_MODEL;
+  const spec = MODEL_SPECS[model];
   const started = performance.now();
 
-  const available = await isModelAvailable(model);
-  if (!available) {
+  const availability = await checkModel(model);
+  if (!availability.reachable) {
     throw new BackgroundRemovalUnavailableError(
-      `The ${model} model isn't being served from ${modelBaseUrl()}. Add the pinned .onnx artifact there (or set NEXT_PUBLIC_REMBG_MODEL_BASE_URL) to enable background removal. The original image is unchanged.`,
+      `${availability.reason ?? "The model could not be reached."} Your image is unchanged — you can save it without a cutout.`,
     );
   }
 
-  const rembg = await loadRembg();
-  options.onProgress?.({ step: "downloading", progress: 2, message: "Loading model…" });
+  options.onProgress?.({
+    step: "downloading",
+    progress: 2,
+    message: availability.ready
+      ? "Loading the cutout model…"
+      : `Fetching the cutout model once (${Math.round(spec.bytes / 1024 / 1024)} MB)…`,
+  });
 
+  const rembg = await loadRembg();
   const session = await rembg.newSession(model);
+  if (options.signal?.aborted) throw new DOMException("Cancelled", "AbortError");
 
   const blob = await rembg.remove(input, {
     session,
@@ -151,7 +198,7 @@ export async function removeBackground(
   };
 }
 
-/** Frees any cached model/session memory once the studio closes. */
+/** Frees cached model/session memory once the studio closes. */
 export async function disposeRembg(): Promise<void> {
   try {
     const rembg = await import("@bunnio/rembg-web");

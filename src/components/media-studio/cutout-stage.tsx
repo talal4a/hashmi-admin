@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
@@ -18,12 +18,12 @@ import { cn } from "@/lib/utils/cn";
 import {
   BackgroundRemovalUnavailableError,
   DEFAULT_REMBG_MODEL,
-  REMBG_MODELS,
+  MODEL_LIST,
   removeBackground,
   type RembgModel,
   type RemovalProgress,
 } from "@/lib/media/background-removal";
-import { canvasToBlob, loadImage } from "./image-utils";
+import { canvasToBlob, loadImage, previewDataUrl } from "./image-utils";
 
 export interface CutoutOutcome {
   canvas: HTMLCanvasElement | null;
@@ -59,6 +59,10 @@ export function CutoutStage({
   const [tool, setTool] = useState<Tool>("erase");
   const [brushSize, setBrushSize] = useState(36);
   const [painting, setPainting] = useState(false);
+
+  // Re-encoding a 1000px canvas to a data URL on every render is a visible
+  // stutter while painting; the comparison image never changes, so encode once.
+  const sourceUrl = useMemo(() => previewDataUrl(sourceCanvas), [sourceCanvas]);
 
   const cutoutRef = useRef<HTMLCanvasElement>(null);
   const historyRef = useRef<ImageData[]>([]);
@@ -225,7 +229,7 @@ export function CutoutStage({
           className="h-9 w-auto min-w-[190px]"
           disabled={running}
         >
-          {REMBG_MODELS.map((m) => (
+          {MODEL_LIST.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
             </option>
@@ -256,7 +260,7 @@ export function CutoutStage({
       </div>
 
       <p className="text-[11.5px] text-[var(--hm-ink-500)]">
-        {REMBG_MODELS.find((m) => m.id === model)?.note} Inference runs in this browser — no image
+        {MODEL_LIST.find((m) => m.id === model)?.note} Inference runs in this browser — no image
         leaves your machine for this step, and there is no per-image charge.
       </p>
 
@@ -315,7 +319,7 @@ export function CutoutStage({
         <div className="hm-checkerboard relative aspect-square w-full max-w-[420px] overflow-hidden rounded-[var(--hm-radius-card)] border border-[var(--hm-border)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={sourceCanvas.toDataURL("image/png")}
+            src={sourceUrl}
             alt="Original"
             className="absolute inset-0 size-full object-contain"
           />

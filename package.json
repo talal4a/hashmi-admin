@@ -13,7 +13,11 @@
     "check:secrets": "node --env-file=.env.local scripts/check-client-bundle.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:secrets",
     "check:rbac": "node --env-file=.env.local scripts/check-rbac.mjs",
-    "create-admin": "node --env-file-if-exists=.env.local scripts/create-admin.mjs"
+    "create-admin": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
+    "postinstall": "node scripts/prepare-media-runtime.mjs",
+    "predev": "node scripts/prepare-media-runtime.mjs",
+    "prebuild": "node scripts/prepare-media-runtime.mjs",
+    "fetch-models": "node scripts/prepare-media-runtime.mjs --models"
   },
   "dependencies": {
     "@bunnio/rembg-web": "^1.0.2",
@@ -26,7 +30,6 @@
     "lucide-react": "^1.44.0",
     "motion": "^13.2.0",
     "next": "16.3.4",
-    "node-vibrant": "^4.0.4",
     "onnxruntime-web": "^1.29.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
