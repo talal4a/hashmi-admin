@@ -193,6 +193,13 @@ rather than the product.
 - Background removal runs in the admin's browser via `@bunnio/rembg-web` over
   `onnxruntime-web`, so there is no per-image cost. Progress is real — it comes
   from the inference callback, never a timer.
+- **Inference is pinned to the WASM execution provider.** Every U2Net-family
+  model pools with `ceil_mode` enabled — `u2netp.onnx` alone has 33 such
+  layers — and onnxruntime-web's WebGPU MaxPool kernel computes that output
+  shape without implementing the padding it implies, so the run throws. Enabling
+  WebGPU therefore breaks the cutout on every machine that has a GPU while
+  leaving it working on machines that do not, which is a hard failure to
+  notice. Revisit when the runtime implements it.
 - Colours come from `src/lib/media/quantize.ts`: a median-cut quantiser over the
   cutout's own RGBA, so transparent pixels are ignored and the swatches describe
   the product. Being a pure function, it is unit-tested rather than judged by
