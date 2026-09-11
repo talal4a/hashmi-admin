@@ -176,6 +176,78 @@ export function previewDataUrl(canvas: HTMLCanvasElement, maxEdge = 512): string
   return small.toDataURL("image/png");
 }
 
+/**
+ * Grounds a cutout with a soft contact shadow (PRD §5.5, layer 9).
+ *
+ * A cut-out product on a flat card floats; a shadow beneath it sits. It is
+ * drawn as an ellipse under the product's own base — found from the alpha, not
+ * assumed to be the bottom of the canvas — and composited underneath, so it
+ * never darkens the product itself.
+ *
+ * Baked into the transparent PNG deliberately. Kept faint and neutral, it reads
+ * correctly on any light card, and the alternative — re-deriving it wherever
+ * the image is rendered — would put this logic in the phone app too.
+ */
+export function addContactShadow(
+  canvas: HTMLCanvasElement,
+  options: { opacity?: number; spread?: number } = {},
+): HTMLCanvasElement {
+  const opacity = options.opacity ?? 0.2;
+  const spread = options.spread ?? 0.45;
+
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return canvas;
+
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  } catch {
+    return canvas;
+  }
+
+  // Where the product actually stands, so the shadow lands under its base.
+  let minX = canvas.width;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      if (data[(y * canvas.width + x) * 4 + 3] <= 24) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxY < 0 || maxX < minX) return canvas;
+
+  const out = document.createElement("canvas");
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const outCtx = out.getContext("2d");
+  if (!outCtx) return canvas;
+
+  const centreX = (minX + maxX) / 2;
+  const width = (maxX - minX + 1) * spread;
+  const height = Math.max(4, (maxX - minX + 1) * 0.055);
+  // Just inside the base, so the shadow reads as contact rather than a halo.
+  const centreY = Math.min(canvas.height - 1, maxY - height * 0.35);
+
+  outCtx.save();
+  outCtx.translate(centreX, centreY);
+  outCtx.scale(1, height / width);
+  const gradient = outCtx.createRadialGradient(0, 0, 0, 0, 0, width);
+  gradient.addColorStop(0, `rgba(15, 23, 42, ${opacity})`);
+  gradient.addColorStop(0.55, `rgba(15, 23, 42, ${opacity * 0.45})`);
+  gradient.addColorStop(1, "rgba(15, 23, 42, 0)");
+  outCtx.fillStyle = gradient;
+  outCtx.beginPath();
+  outCtx.arc(0, 0, width, 0, Math.PI * 2);
+  outCtx.fill();
+  outCtx.restore();
+
+  outCtx.drawImage(canvas, 0, 0);
+  return out;
+}
+
 export async function blobFromUrl(url: string): Promise<Blob> {
   const response = await fetch(url, { mode: "cors" });
   if (!response.ok) throw new Error("Could not fetch that image.");

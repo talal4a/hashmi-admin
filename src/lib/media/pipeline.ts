@@ -16,8 +16,10 @@ import {
 } from "./flat-background";
 import { proxiedImageUrl } from "./providers/hosts";
 import { FALLBACK_PALETTE, buildPalette, generateCardBackgrounds } from "./palette";
+import { refineCutout, type RefineReport } from "./refine";
 import {
   DEFAULT_TRANSFORM,
+  addContactShadow,
   canvasToBlob,
   loadImage,
   renderTransformed,
@@ -44,6 +46,7 @@ export type PipelineStep =
   | "loading"
   | "squaring"
   | "cutout"
+  | "refining"
   | "trimming"
   | "palette"
   | "done"
@@ -71,7 +74,9 @@ export interface PipelineResult {
   modelVersion: string | null;
   /** Set when removal was attempted and did not work. Never hidden. */
   cutoutFailure: string | null;
-  timings: { total: number; cutout: number; palette: number };
+  /** What the refinement layers actually did. Null when no cutout was made. */
+  refinement: RefineReport | null;
+  timings: { total: number; cutout: number; refine: number; palette: number };
 }
 
 export interface PipelineOptions {
@@ -87,10 +92,12 @@ export interface PipelineOptions {
   subject?: "single" | "group";
   /** Forces removal even when the picture looks like it has no background. */
   forceRemoval?: boolean;
+  /** Grounds the product with a soft contact shadow. On by default. */
+  shadow?: boolean;
 }
 
 /** Weights for the overall progress bar, so it moves at a believable rate. */
-const WEIGHTS = { load: 8, square: 6, cutout: 72, trim: 4, palette: 10 };
+const WEIGHTS = { load: 6, square: 5, cutout: 62, refine: 12, trim: 5, palette: 10 };
 
 function throwIfAborted(signal: AbortSignal | undefined) {
   if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
@@ -240,18 +247,57 @@ export async function runPipeline(
   done += WEIGHTS.cutout;
   throwIfAborted(options.signal);
 
-  /* 4. Trim the empty surround so the product fills its card. */
+  /*
+   * 3b. Layers 2-5 — refine the mask against the full-resolution photograph.
+   *
+   * Whatever produced the mask, it was decided at low resolution: u2netp works
+   * at 320x320 and the flood works on colour alone. The picture in hand knows
+   * exactly where its own edges are, so the soft band is pulled onto them, the
+   * confetti dropped, the old backdrop taken out of the edge colours, and any
+   * enclosed background reopened.
+   */
+  const refineStarted = performance.now();
+  let refinement: RefineReport | null = null;
+  if (cutout) {
+    advance(WEIGHTS.refine, "refining", "Cleaning up the edges…");
+    const refined = refineCutout(
+      pixelsOf(cutout),
+      pixelsOf(squared),
+      cutout.width,
+      cutout.height,
+      // The flood path knows the exact backdrop; the model path has to infer it.
+      plan.method === "flat" && plan.background ? { background: plan.background } : {},
+    );
+    refinement = refined.report;
+    cutout = canvasFrom(refined.pixels, cutout.width, cutout.height);
+  }
+  const refineMs = Math.round(performance.now() - refineStarted);
+  done += WEIGHTS.refine;
+  throwIfAborted(options.signal);
+
+  /* 4 (layer 6). Trim the empty surround so the product fills its card. */
   advance(0, "trimming", "Centring the product…");
-  const display = cutout ? trimTransparent(cutout) : squared;
+  const trimmed = cutout ? trimTransparent(cutout) : squared;
   done += WEIGHTS.trim;
   throwIfAborted(options.signal);
 
-  /* 5. Colours, read from the cutout where there is one. */
+  /*
+   * 5 (layers 7-8). Colours, read from the product and nothing else.
+   *
+   * Before the shadow, on principle: the swatches should describe the product,
+   * not a grey ellipse painted under it. At the shadow's current weight this
+   * makes no measurable difference — the same photograph yields the same five
+   * swatches either way — so it is insurance, not a fix, and it stops mattering
+   * only for as long as the shadow stays faint.
+   */
   advance(0, "palette", "Reading the colours…");
   const paletteStarted = performance.now();
-  const palette = autoPalette(display);
+  const palette = autoPalette(trimmed);
   const paletteMs = Math.round(performance.now() - paletteStarted);
   done += WEIGHTS.palette;
+
+  /* Layer 9 — ground it, so the product sits on the card rather than floats. */
+  const display = cutout && options.shadow !== false ? addContactShadow(trimmed) : trimmed;
 
   report({ step: "done", progress: 100, message: "Ready" });
 
@@ -265,7 +311,13 @@ export async function runPipeline(
     model,
     modelVersion,
     cutoutFailure,
-    timings: { total: Math.round(performance.now() - started), cutout: cutoutMs, palette: paletteMs },
+    refinement,
+    timings: {
+      total: Math.round(performance.now() - started),
+      cutout: cutoutMs,
+      refine: refineMs,
+      palette: paletteMs,
+    },
   };
 }
 

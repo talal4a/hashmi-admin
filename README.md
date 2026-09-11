@@ -204,6 +204,29 @@ rather than the product.
   met the table, and IS-Net was worse, reducing a bowl of berries to one
   blueberry and one blackberry. Those are used as they are, cropped to fill the
   tile, with a "cut it out anyway" override.
+- **The mask is cleaned up before it is used** (`refine.ts`). Whatever produced
+  it decided at low resolution — u2netp works at 320x320 whatever size the photo
+  is — so the haze is stretched out of the matte, stray fragments are dropped,
+  the old backdrop is solved out of the half-transparent edge pixels
+  (`C = aF + (1-a)B`, rearranged), and background sealed inside the product — the
+  gap in a handle — is reopened. Measured end to end, the share of a subject that
+  is neither in nor out fell from 22-50% to 10-11%.
+  Two things this cost to learn. Decontamination must read the *original*
+  photograph: a cutout has its removed pixels zeroed, so estimating the backdrop
+  from it returns RGB(8,9,1) and "remove black" draws a yellow-green rim instead
+  of removing one. And it only runs when the discarded region really was one
+  colour — on a photographed scene there is no single backdrop to take out.
+  A guided filter was written for this step too, fitting alpha against the
+  full-resolution image. Measured against the stretch alone on four real
+  cutouts it lost every time, at every radius and epsilon tried, so it is not
+  here. The thresholds were then chosen by eye, because the obvious metric is a
+  trap: a symmetric stretch never moves a pixel across 0.5, so "fewer
+  half-transparent pixels" bottoms out at a hard threshold and rewards exactly
+  the stair-stepped edge it should avoid.
+- **A soft contact shadow is baked in**, so the product sits on its card rather
+  than floating. Drawn under the product's own base, found from the alpha. The
+  colours are read strictly before it: swatches should describe the product, not
+  a grey ellipse painted beneath it.
 - **Every cutout is judged before it is used.** The model always returns a mask,
   including when it could not read the picture. `judgeCutout` rejects one that
   erased nearly everything, removed nothing, or came back as a half-transparent

@@ -100,6 +100,26 @@ export interface MediaProcessing {
   processedAt: string | null;
   /** Set when removal was attempted and failed; original is kept intact. */
   failureReason?: string | null;
+  /**
+   * How the background was dealt with: flooded away from a plain backdrop,
+   * segmented by the model, or deliberately left because there was none.
+   */
+  method?: "flat" | "model" | "none" | null;
+  /**
+   * What the clean-up layers did. Kept so a cutout that looks wrong months
+   * later can be explained without re-running anything.
+   */
+  refinement?: {
+    /** Half-transparent share of the subject, before and after clean-up. */
+    raggedBefore: number;
+    raggedAfter: number;
+    specksRemoved: number;
+    holesOpened: number;
+    decontaminated: number;
+    backdropHex: string | null;
+  } | null;
+  /** A soft contact shadow was baked into the cutout. */
+  shadow?: boolean;
 }
 
 export interface ProductMedia {

@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils/cn";
-import { FALLBACK_PALETTE } from "@/lib/media/palette";
+import { FALLBACK_PALETTE, rgbToHex } from "@/lib/media/palette";
 import { DEFAULT_REMBG_MODEL, MODEL_LIST, disposeRembg } from "@/lib/media/background-removal";
 import { loadForEditing, runPipeline, autoPalette, type PipelineProgress } from "@/lib/media/pipeline";
 import { composeCollage, type CategoryArtSource } from "@/lib/media/collage";
@@ -26,6 +26,7 @@ import { removeBackground } from "@/lib/media/background-removal";
 import { extractSwatchesFromCanvas } from "@/lib/media/extract-palette";
 import { scoreGroupShot } from "@/lib/media/group-shot";
 import type { RemovalMethod } from "@/lib/media/flat-background";
+import type { RefineReport } from "@/lib/media/refine";
 import type { ExtractedSwatches } from "@/lib/media/quantize";
 import type { MediaPalette, ProductMedia, ProviderImageResult } from "@/types";
 import type { RembgModel } from "@/lib/media/model-catalog";
@@ -139,6 +140,7 @@ export function MediaStudio({
   const [previewUrl, setPreviewUrl] = useState("");
   const [timings, setTimings] = useState<{ total: number; cutout: number } | null>(null);
   const [method, setMethod] = useState<{ method: RemovalMethod; reason: string } | null>(null);
+  const [refinement, setRefinement] = useState<RefineReport | null>(null);
 
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +165,7 @@ export function MediaStudio({
     setPreviewUrl("");
     setTimings(null);
     setMethod(null);
+    setRefinement(null);
     setProgress(null);
     setError(null);
     setFineTune(false);
@@ -222,6 +225,7 @@ export function MediaStudio({
 
         setSquared(result.squared);
         setMethod({ method: result.method, reason: result.methodReason });
+        setRefinement(result.refinement);
         setCutout({
           canvas: result.cutout,
           model: result.model,
@@ -497,6 +501,20 @@ export function MediaStudio({
           modelVersion: cutout.modelVersion,
           processedAt: cutout.canvas ? new Date().toISOString() : null,
           failureReason: cutout.failureReason,
+          method: method?.method ?? null,
+          refinement: refinement
+            ? {
+                raggedBefore: refinement.raggedBefore,
+                raggedAfter: refinement.raggedAfter,
+                specksRemoved: refinement.specksRemoved,
+                holesOpened: refinement.holesOpened,
+                decontaminated: refinement.decontaminated,
+                backdropHex: refinement.background.confident
+                  ? rgbToHex(refinement.background.color)
+                  : null,
+              }
+            : null,
+          shadow: Boolean(cutout.canvas),
         },
       };
 
